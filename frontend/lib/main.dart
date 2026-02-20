@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'app_nav.dart';
 import 'home_page.dart';
 import 'planner_page.dart';
 import 'monthly_planner_page.dart';
@@ -9,6 +10,7 @@ import 'assignment_setup.dart';
 import 'ai_task_breakdown.dart';
 import 'ai_task_distribution.dart';
 import 'edit_setup.dart';
+import 'settings_page.dart';
 
 void main() {
   runApp(const MyApp());
@@ -49,6 +51,15 @@ class MainNavigation extends StatefulWidget {
 
 class _MainNavigationState extends State<MainNavigation> {
   int _selectedIndex = 0;
+
+  static const int _settingsIndex = 3;
+
+  @override
+  void initState() {
+    super.initState();
+    AppNav.navigateToSettings = () =>
+        setState(() => _selectedIndex = _settingsIndex);
+  }
 
   final List<Widget> _pages = [
     const HomePage(),

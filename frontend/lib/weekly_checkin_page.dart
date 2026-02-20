@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../api/planner_api.dart';
 
 class WeeklyCheckInPage extends StatefulWidget {
   const WeeklyCheckInPage({super.key});
@@ -10,6 +11,41 @@ class WeeklyCheckInPage extends StatefulWidget {
 class _WeeklyCheckInPageState extends State<WeeklyCheckInPage> {
   final TextEditingController _feedbackController = TextEditingController();
   final TextEditingController _workloadController = TextEditingController();
+  bool _isLoading = false;
+  WeeklySummary? _summary;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSummary();
+  }
+
+  Future<void> _loadSummary() async {
+    final s = await PlannerApi.getWeeklySummary();
+    if (mounted) setState(() => _summary = s);
+  }
+
+  Future<void> _onRegenerate() async {
+    final hours = int.tryParse(_workloadController.text) ?? 20;
+    setState(() => _isLoading = true);
+    try {
+      final week = await PlannerApi.regenerateNextWeek(
+        feedback: _feedbackController.text.trim().isEmpty ? null : _feedbackController.text.trim(),
+        availableStudyHoursNextWeek: hours,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(week != null ? 'Weekly plan updated successfully!' : 'Failed to update plan. Is the backend running?'),
+            backgroundColor: week != null ? Colors.green : Colors.red,
+          ),
+        );
+        if (week != null) Navigator.pop(context);
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -85,11 +121,19 @@ class _WeeklyCheckInPageState extends State<WeeklyCheckInPage> {
                     Row(
                       children: [
                         Expanded(
-                          child: _buildStatBox(title: 'Tasks Completed', value: '8', subtitle: '/12'),
+                          child: _buildStatBox(
+                            title: 'Tasks Completed',
+                            value: '${_summary?.tasksCompleted ?? 0}',
+                            subtitle: '/${_summary?.totalTasks ?? 0}',
+                          ),
                         ),
                         const SizedBox(width: 13),
                         Expanded(
-                          child: _buildStatBox(title: 'Completion Rate', value: '67', subtitle: '%'),
+                          child: _buildStatBox(
+                            title: 'Completion Rate',
+                            value: '${_summary?.completionRatePercent ?? 0}',
+                            subtitle: '%',
+                          ),
                         ),
                       ],
                     ),
@@ -115,9 +159,9 @@ class _WeeklyCheckInPageState extends State<WeeklyCheckInPage> {
                             ),
                           ),
                           const SizedBox(height: 4),
-                          const Text(
-                            '2 tasks',
-                            style: TextStyle(
+                          Text(
+                            '${_summary?.overdueTasks ?? 0} tasks',
+                            style: const TextStyle(
                               fontFamily: 'Arimo',
                               fontSize: 20,
                               height: 1.4,
@@ -329,38 +373,36 @@ class _WeeklyCheckInPageState extends State<WeeklyCheckInPage> {
                     ),
                     const SizedBox(height: 12),
                     ElevatedButton(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Weekly plan updated successfully!'),
-                            backgroundColor: Colors.green,
-                          ),
-                        );
-                        Navigator.pop(context);
-                      },
+                      onPressed: _isLoading ? null : _onRegenerate,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFFFFFFFF),
                         minimumSize: const Size(double.infinity, 36),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         elevation: 0,
                       ),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.refresh, color: Color(0xFFAFBCDD), size: 16),
-                          SizedBox(width: 8),
-                          Text(
-                            'Regenerate Next Week Plan',
-                            style: TextStyle(
-                              fontFamily: 'Arimo',
-                              fontSize: 14,
-                              height: 1.43,
-                              color: Color(0xFFAFBCDD),
-                              fontWeight: FontWeight.w700,
+                      child: _isLoading
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFAFBCDD)),
+                            )
+                          : const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.refresh, color: Color(0xFFAFBCDD), size: 16),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Regenerate Next Week Plan',
+                                  style: TextStyle(
+                                    fontFamily: 'Arimo',
+                                    fontSize: 14,
+                                    height: 1.43,
+                                    color: Color(0xFFAFBCDD),
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                        ],
-                      ),
                     ),
                     const SizedBox(height: 16),
                   ],

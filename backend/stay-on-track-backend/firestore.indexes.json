@@ -1,0 +1,11 @@
+{
+  "indexes": [
+    {"collectionGroup":"tasks","queryScope":"COLLECTION","fields":[{"fieldPath":"userId","order":"ASCENDING"},{"fieldPath":"dueDate","order":"ASCENDING"}]},
+    {"collectionGroup":"deadlines","queryScope":"COLLECTION","fields":[{"fieldPath":"userId","order":"ASCENDING"},{"fieldPath":"dueDate","order":"ASCENDING"}]},
+    {"collectionGroup":"weeklyCheckIns","queryScope":"COLLECTION","fields":[{"fieldPath":"userId","order":"ASCENDING"},{"fieldPath":"createdAt","order":"DESCENDING"}]},
+    {"collectionGroup":"plannerWeeks","queryScope":"COLLECTION","fields":[{"fieldPath":"userId","order":"ASCENDING"},{"fieldPath":"weekStartDate","order":"ASCENDING"}]},
+    {"collectionGroup":"plannerTasks","queryScope":"COLLECTION","fields":[{"fieldPath":"plannerWeekId","order":"ASCENDING"},{"fieldPath":"dueDate","order":"ASCENDING"}]},
+    {"collectionGroup":"plannerTasks","queryScope":"COLLECTION","fields":[{"fieldPath":"userId","order":"ASCENDING"},{"fieldPath":"dueDate","order":"ASCENDING"}]}
+  ],
+  "fieldOverrides": []
+}

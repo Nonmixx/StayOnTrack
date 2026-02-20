@@ -1,28 +1,69 @@
 import 'package:flutter/material.dart';
+import '../api/planner_api.dart';
+import '../app_nav.dart';
+import '../utils/calendar_utils.dart';
+import '../weekly_checkin_page.dart';
+import '../widgets/empty_state_card.dart';
 
 class WeeklyPlannerPage extends StatefulWidget {
-  final int weekNumber;
+  final DateTime weekStartDate;
 
-  const WeeklyPlannerPage({super.key, required this.weekNumber});
+  const WeeklyPlannerPage({super.key, required this.weekStartDate});
 
   @override
   State<WeeklyPlannerPage> createState() => _WeeklyPlannerPageState();
 }
 
 class _WeeklyPlannerPageState extends State<WeeklyPlannerPage> {
-  final List<DayTask> tasks = [
-    DayTask(day: 'Monday', date: 'Feb 12', task: 'Review lecture notes', course: 'CS1234', duration: '1.5 hours', completed: false),
-    DayTask(day: 'Tuesday', date: 'Feb 13', task: 'Practice problems', course: 'MA1101', duration: '2 hours', completed: false),
-    DayTask(day: 'Wednesday', date: 'Feb 14', task: 'Read textbook chapter', course: 'PH2001', duration: '1 hour', completed: false),
-    DayTask(day: 'Thursday', date: 'Feb 15', task: 'Work on assignment', course: 'CS1234', duration: '3 hours', completed: true),
-    DayTask(day: 'Friday', date: 'Feb 16', task: 'Revision session', course: 'MA1101', duration: '1.5 hours', completed: true),
-  ];
+  List<PlannerTask> _tasks = [];
+  List<Deadline> _deadlines = [];
+  bool _loading = true;
 
-  int get completedCount => tasks.where((t) => t.completed).length;
-  int get totalTasks => tasks.length;
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      final weekStart = CalendarUtils.toIso(_normalizedWeekStart);
+      final results = await Future.wait([
+        PlannerApi.getWeekTasks(weekStart),
+        PlannerApi.getDeadlines(),
+      ]);
+      if (mounted) setState(() {
+        _tasks = results[0] as List<PlannerTask>;
+        _deadlines = results[1] as List<Deadline>;
+        _loading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() {
+        _tasks = [];
+        _deadlines = [];
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _loadTasks() async => _loadData();
+
+  Future<void> _toggleTask(String taskId, bool completed) async {
+    final ok = await PlannerApi.toggleTaskCompletion(taskId, completed);
+    if (ok && mounted) _loadTasks();
+  }
+
+  int get completedCount => _tasks.where((t) => t.completed).length;
+  int get totalTasks => _tasks.length;
+
+  DateTime get _normalizedWeekStart =>
+      DateTime(widget.weekStartDate.year, widget.weekStartDate.month, widget.weekStartDate.day);
 
   @override
   Widget build(BuildContext context) {
+    final start = _normalizedWeekStart;
+    final weekLabel = '${CalendarUtils.formatShort(start)} - ${CalendarUtils.formatShort(start.add(const Duration(days: 6)))}';
+
     return Scaffold(
       backgroundColor: const Color(0xFFFFF8F0),
       appBar: AppBar(
@@ -35,7 +76,7 @@ class _WeeklyPlannerPageState extends State<WeeklyPlannerPage> {
         ),
         centerTitle: true,
         title: Text(
-          'Week ${widget.weekNumber}',
+          weekLabel,
           style: const TextStyle(
             fontFamily: 'Arimo',
             fontSize: 16,
@@ -45,149 +86,186 @@ class _WeeklyPlannerPageState extends State<WeeklyPlannerPage> {
           ),
         ),
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-            children: [
-              // Progress Card
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.only(left: 16, right: 16, top: 16),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Color(0xFFAFBCDD), Color(0xFFC8CEDF)],
-                  ),
-                  boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 3, offset: const Offset(0, 1)),
-                    BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 2, offset: const Offset(0, 1)),
-                  ],
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Week Progress',
-                      style: TextStyle(
-                        fontFamily: 'Arimo',
-                        fontSize: 16,
-                        height: 1.5,
-                        color: Color(0xFFFFFFFF),
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(100),
-                            child: LinearProgressIndicator(
-                              value: completedCount / totalTasks,
-                              backgroundColor: Colors.white.withOpacity(0.3),
-                              valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
-                              minHeight: 12,
+      body: _loading
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFFAFBCDD)))
+          : Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          // Progress Card
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.only(left: 16, right: 16, top: 16),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [Color(0xFFAFBCDD), Color(0xFFC8CEDF)],
+                              ),
+                              boxShadow: [
+                                BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 3, offset: const Offset(0, 1)),
+                                BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 2, offset: const Offset(0, 1)),
+                              ],
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Week Progress',
+                                  style: TextStyle(
+                                    fontFamily: 'Arimo',
+                                    fontSize: 16,
+                                    height: 1.5,
+                                    color: Color(0xFFFFFFFF),
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(100),
+                                        child: LinearProgressIndicator(
+                                          value: totalTasks > 0 ? completedCount / totalTasks : 0,
+                                          backgroundColor: Colors.white.withOpacity(0.3),
+                                          valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                                          minHeight: 12,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Text(
+                                      '${totalTasks > 0 ? ((completedCount / totalTasks) * 100).toInt() : 0}%',
+                                      style: const TextStyle(
+                                        fontFamily: 'Arimo',
+                                        fontSize: 16,
+                                        height: 1.5,
+                                        color: Color(0xFFFFFFFF),
+                                        fontWeight: FontWeight.w400,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '$completedCount of $totalTasks tasks completed',
+                                  style: TextStyle(
+                                    fontFamily: 'Arimo',
+                                    fontSize: 14,
+                                    height: 1.43,
+                                    color: Colors.white.withOpacity(0.9),
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                              ],
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          '${((completedCount / totalTasks) * 100).toInt()}%',
-                          style: const TextStyle(
-                            fontFamily: 'Arimo',
-                            fontSize: 16,
-                            height: 1.5,
-                            color: Color(0xFFFFFFFF),
-                            fontWeight: FontWeight.w400,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '$completedCount of $totalTasks tasks completed',
-                      style: TextStyle(
-                        fontFamily: 'Arimo',
-                        fontSize: 14,
-                        height: 1.43,
-                        color: Colors.white.withOpacity(0.9),
-                        fontWeight: FontWeight.w400,
+                          const SizedBox(height: 16),
+                          // Tasks by day
+                          ..._tasksByDay().entries.map((e) => Padding(
+                                padding: const EdgeInsets.only(bottom: 16),
+                                child: DailyTaskCard(
+                                  day: e.key,
+                                  date: _parseAndFormat(e.value.first.dueDate),
+                                  tasks: e.value,
+                                  onToggle: (taskId, completed) => _toggleTask(taskId, completed),
+                                ),
+                              )),
+                          if (_tasks.isEmpty)
+                            EmptyStateCard(
+                              icon: Icons.calendar_today_outlined,
+                              title: 'No tasks for this week',
+                              subtitle: _deadlines.isEmpty
+                                  ? 'Set up your plan in Settings first (add deadlines). Then use Weekly Check-In to generate your schedule.'
+                                  : 'Use Weekly Check-In to generate or update your plan based on your condition.',
+                              buttonLabel: _deadlines.isEmpty ? 'Go to Settings' : 'Weekly Check-In',
+                              onButtonTap: () {
+                                if (_deadlines.isEmpty) {
+                                  AppNav.goToSettings(context);
+                                } else {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(builder: (context) => const WeeklyCheckInPage()),
+                                  );
+                                }
+                              },
+                            ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 16),
-                  ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-
-              // Daily tasks
-              ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: tasks.length,
-                itemBuilder: (context, index) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: DailyTaskCard(
-                      dayTask: tasks[index],
-                      dayNumber: index + 1,
-                      totalDays: tasks.length,
-                      onToggle: () => setState(() => tasks[index].completed = !tasks[index].completed),
-                    ),
-                  );
-                },
-              ),
               ],
             ),
-          ),
-            ),
-          ),
-        ],
-      ),
     );
+  }
+
+  Map<String, List<PlannerTask>> _tasksByDay() {
+    final map = <String, List<PlannerTask>>{};
+    for (final t in _tasks) {
+      final day = t.dueDate != null ? _dayFromIso(t.dueDate!) : 'Unknown';
+      map.putIfAbsent(day, () => []).add(t);
+    }
+    final order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    final sorted = <String, List<PlannerTask>>{};
+    for (final d in order) {
+      if (map.containsKey(d)) sorted[d] = map[d]!;
+    }
+    for (final k in map.keys) {
+      if (!sorted.containsKey(k)) sorted[k] = map[k]!;
+    }
+    return sorted;
+  }
+
+  String _dayFromIso(String iso) {
+    try {
+      final parts = iso.split('-');
+      if (parts.length < 3) return 'Unknown';
+      final d = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+      return CalendarUtils.weekdayName(d);
+    } catch (_) {
+      return 'Unknown';
+    }
+  }
+
+  String _parseAndFormat(String? iso) {
+    if (iso == null) return '';
+    try {
+      final parts = iso.split('-');
+      if (parts.length < 3) return iso;
+      final d = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+      return CalendarUtils.formatShort(d);
+    } catch (_) {
+      return iso;
+    }
   }
 }
 
-class DayTask {
+class DailyTaskCard extends StatelessWidget {
   final String day;
   final String date;
-  final String task;
-  final String course;
-  final String duration;
-  bool completed;
-
-  DayTask({
-    required this.day,
-    required this.date,
-    required this.task,
-    required this.course,
-    required this.duration,
-    this.completed = false,
-  });
-}
-
-class DailyTaskCard extends StatelessWidget {
-  final DayTask dayTask;
-  final int dayNumber;
-  final int totalDays;
-  final VoidCallback onToggle;
+  final List<PlannerTask> tasks;
+  final void Function(String taskId, bool completed) onToggle;
 
   const DailyTaskCard({
     Key? key,
-    required this.dayTask,
-    required this.dayNumber,
-    required this.totalDays,
+    required this.day,
+    required this.date,
+    required this.tasks,
     required this.onToggle,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    final completed = tasks.where((t) => t.completed).length;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.only(left: 16, right: 16, top: 16),
@@ -208,7 +286,7 @@ class DailyTaskCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    dayTask.day,
+                    day,
                     style: const TextStyle(
                       fontFamily: 'Arimo',
                       fontSize: 16,
@@ -218,7 +296,7 @@ class DailyTaskCard extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    dayTask.date,
+                    date,
                     style: const TextStyle(
                       fontFamily: 'Arimo',
                       fontSize: 14,
@@ -230,7 +308,7 @@ class DailyTaskCard extends StatelessWidget {
                 ],
               ),
               Text(
-                '${dayTask.completed ? 1 : 0}/1',
+                '$completed/${tasks.length}',
                 style: const TextStyle(
                   fontFamily: 'Arimo',
                   fontSize: 12,
@@ -242,68 +320,87 @@ class DailyTaskCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          InkWell(
-            onTap: onToggle,
-            borderRadius: BorderRadius.circular(10),
-            child: Container(
-              padding: const EdgeInsets.only(left: 16.8, right: 16.8, top: 16.8, bottom: 0.8),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFFFFF),
-                border: Border.all(color: const Color(0xFFAFBCDD).withOpacity(0.1), width: 0.8),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 3, offset: const Offset(0, 1)),
-                  BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 2, offset: const Offset(0, 1)),
-                ],
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 24,
-                    height: 24,
-                    margin: const EdgeInsets.only(top: 4),
+          ...tasks.map((t) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: InkWell(
+                  onTap: () => onToggle(t.id, !t.completed),
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    padding: const EdgeInsets.only(left: 16.8, right: 16.8, top: 16.8, bottom: 12),
                     decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: dayTask.completed ? const Color(0xFFAFBCDD) : const Color(0xFFD1D5DC), width: 2),
-                      color: dayTask.completed ? const Color(0xFFAFBCDD) : Colors.transparent,
+                      border: Border.all(color: const Color(0xFFAFBCDD).withOpacity(0.1), width: 0.8),
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    child: dayTask.completed ? const Icon(Icons.check, color: Colors.white, size: 16) : null,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
+                    child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          dayTask.task,
-                          style: TextStyle(
-                            fontFamily: 'Arimo',
-                            fontSize: 16,
-                            height: 1.5,
-                            color: dayTask.completed ? const Color(0xFF99A1AF) : const Color(0xFF101828),
-                            fontWeight: FontWeight.w400,
-                            decoration: dayTask.completed ? TextDecoration.lineThrough : null,
+                        Container(
+                          width: 24,
+                          height: 24,
+                          margin: const EdgeInsets.only(top: 4),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: t.completed ? const Color(0xFFAFBCDD) : const Color(0xFFD1D5DC),
+                              width: 2,
+                            ),
+                            color: t.completed ? const Color(0xFFAFBCDD) : Colors.transparent,
                           ),
+                          child: t.completed ? const Icon(Icons.check, color: Colors.white, size: 16) : null,
                         ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Text(dayTask.course, style: const TextStyle(fontFamily: 'Arimo', fontSize: 14, height: 1.43, color: Color(0xFFAFBCDD), fontWeight: FontWeight.w400)),
-                            const SizedBox(width: 12),
-                            const Text('•', style: TextStyle(fontFamily: 'Arimo', fontSize: 14, height: 1.43, color: Color(0xFF6A7282), fontWeight: FontWeight.w400)),
-                            const SizedBox(width: 12),
-                            Text(dayTask.duration, style: const TextStyle(fontFamily: 'Arimo', fontSize: 14, height: 1.43, color: Color(0xFF6A7282), fontWeight: FontWeight.w400)),
-                          ],
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                t.title,
+                                style: TextStyle(
+                                  fontFamily: 'Arimo',
+                                  fontSize: 16,
+                                  height: 1.5,
+                                  color: t.completed ? const Color(0xFF99A1AF) : const Color(0xFF101828),
+                                  fontWeight: FontWeight.w400,
+                                  decoration: t.completed ? TextDecoration.lineThrough : null,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Text(
+                                    t.course,
+                                    style: const TextStyle(
+                                      fontFamily: 'Arimo',
+                                      fontSize: 14,
+                                      height: 1.43,
+                                      color: Color(0xFFAFBCDD),
+                                      fontWeight: FontWeight.w400,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  const Text('•', style: TextStyle(fontFamily: 'Arimo', fontSize: 14, color: Color(0xFF6A7282))),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    t.duration,
+                                    style: const TextStyle(
+                                      fontFamily: 'Arimo',
+                                      fontSize: 14,
+                                      height: 1.43,
+                                      color: Color(0xFF6A7282),
+                                      fontWeight: FontWeight.w400,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
                   ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
+                ),
+              )),
+          const SizedBox(height: 4),
         ],
       ),
     );
