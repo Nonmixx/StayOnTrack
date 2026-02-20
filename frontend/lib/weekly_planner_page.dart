@@ -183,7 +183,7 @@ class _WeeklyPlannerPageState extends State<WeeklyPlannerPage> {
                               icon: Icons.calendar_today_outlined,
                               title: 'No tasks for this week',
                               subtitle: _deadlines.isEmpty
-                                  ? 'Set up your plan in Settings first (add deadlines). Then use Weekly Check-In to generate your schedule.'
+                                  ? 'Set up your plan in Settings first (add deadlines). You may add all your exams, assignments or any other tasks there.'
                                   : 'Use Weekly Check-In to generate or update your plan based on your condition.',
                               buttonLabel: _deadlines.isEmpty ? 'Go to Settings' : 'Weekly Check-In',
                               onButtonTap: () {

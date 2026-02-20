@@ -222,7 +222,7 @@ class _HomePageState extends State<HomePage> {
                           title: 'No tasks for today',
                           subtitle: _nearestDeadline != null
                               ? 'Your plan will appear here. Use Weekly Check-In to update your plan based on your condition.'
-                              : 'Set up your plan in Settings first (add deadlines). Then use Weekly Check-In to generate your schedule.',
+                              : 'Set up your plan in Settings first (add deadlines). You may add all your exams, assignments or any other tasks there.',
                           buttonLabel: _nearestDeadline != null ? 'Weekly Check-In' : 'Go to Settings',
                           onButtonTap: () {
                             if (_nearestDeadline != null) {

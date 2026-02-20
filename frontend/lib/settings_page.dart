@@ -28,7 +28,7 @@ class SettingsPage extends StatelessWidget {
         child: Padding(
           padding: EdgeInsets.all(24),
           child: Text(
-            'Set up your plan here.\nAdd deadlines, semester dates, and preferences.\n(Member 1 setup flow will be linked)',
+            'Set up your plan in Settings first (add deadlines). You may add all your exams, assignments or any other tasks there.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontFamily: 'Arimo',

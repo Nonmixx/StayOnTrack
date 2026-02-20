@@ -91,7 +91,7 @@ class _PlannerPageState extends State<PlannerPage> {
                         child: EmptyStateCard(
                           icon: Icons.event_note_outlined,
                           title: 'No deadlines yet',
-                          subtitle: 'Set up your plan in Settings first. Add exams and assignments there, then use Weekly Check-In to generate your schedule.',
+                          subtitle: 'Set up your plan in Settings first (add deadlines). You may add all your exams, assignments or any other tasks there.',
                           buttonLabel: 'Go to Settings',
                           onButtonTap: () => AppNav.goToSettings(context),
                         ),
