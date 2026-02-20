@@ -4,6 +4,11 @@ import 'planner_page.dart';
 import 'monthly_planner_page.dart';
 import 'weekly_planner_page.dart';
 import 'weekly_checkin_page.dart';
+import 'group_overview.dart';
+import 'assignment_setup.dart';
+import 'ai_task_breakdown.dart';
+import 'ai_task_distribution.dart';
+import 'edit_setup.dart';
 
 void main() {
   runApp(const MyApp());
@@ -23,6 +28,14 @@ class MyApp extends StatelessWidget {
         fontFamily: 'Roboto',
       ),
       home: const MainNavigation(),
+
+      routes: {
+        '/group-overview': (context) => const GroupPage(),
+        '/group-assignment-setup': (context) => const AssignmentSetupPage(),
+        '/task-breakdown': (context) => const TaskBreakdownPage(),
+        '/task-distribution': (context) => const TaskDistributionPage(),
+        '/edit-setup': (context) => const EditSetupPage(),
+      },
     );
   }
 }
@@ -84,33 +97,6 @@ class _MainNavigationState extends State<MainNavigation> {
   }
 }
 
-// Placeholder pages
-class GroupPage extends StatelessWidget {
-  const GroupPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey[50],
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        title: const Text(
-          'Group',
-          style: TextStyle(
-            color: Colors.black87,
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-      body: const Center(
-        child: Text('Group Page'),
-      ),
-    );
-  }
-}
-
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
 
@@ -130,9 +116,7 @@ class SettingsPage extends StatelessWidget {
           ),
         ),
       ),
-      body: const Center(
-        child: Text('Settings Page'),
-      ),
+      body: const Center(child: Text('Settings Page')),
     );
   }
 }
