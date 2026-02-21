@@ -74,6 +74,7 @@ class _MainNavigationState extends State<MainNavigation> {
       body: _pages[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
+        backgroundColor: const Color(0xFFFFFFFF),
         selectedItemColor: const Color(0xFFAFBCDD),
         unselectedItemColor: const Color(0xFF99A1AF),
         selectedFontSize: 12,

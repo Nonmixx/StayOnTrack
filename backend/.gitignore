@@ -1,6 +1,7 @@
 HELP.md
 MEMBER2_README.md
 MEMBER2_EXPLAINED.md
+GOOGLE_AI_SETUP.md
 target/
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
@@ -37,3 +38,6 @@ build/
 ### Firebase credentials - NEVER commit these! ###
 firebase-key.json
 **/firebase-key.json
+
+### Local config with API keys - do not commit ###
+application-local.properties
