@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'app_nav.dart';
+import 'routes.dart';
 import 'weekly_checkin_page.dart';
 import 'api/planner_api.dart';
 import 'utils/calendar_utils.dart';
 import 'widgets/empty_state_card.dart';
+import 'data/deadline_store.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -16,11 +18,28 @@ class _HomePageState extends State<HomePage> {
   List<PlannerTask> _tasks = [];
   Deadline? _nearestDeadline;
   bool _loading = true;
+  final Set<String> _demoCompletedIds = {}; // completion for store-sourced tasks
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    deadlineStore.addListener(_onDeadlineStoreChanged);
+  }
+
+  @override
+  void dispose() {
+    deadlineStore.removeListener(_onDeadlineStoreChanged);
+    super.dispose();
+  }
+
+  void _onDeadlineStoreChanged() {
+    if (mounted) _loadData();
+  }
+
+  static String _storeTaskId(DeadlineItem item) {
+    final due = item.dueDate?.millisecondsSinceEpoch ?? 0;
+    return 'store-${item.courseName}|${item.title}|$due';
   }
 
   Future<void> _loadData() async {
@@ -49,8 +68,51 @@ class _HomePageState extends State<HomePage> {
           if (due.isBefore(nearestDue)) nearest = d;
         } catch (_) {}
       }
+      // When API returns no tasks, show all deadlines from store in Today's Tasks
+      List<PlannerTask> displayTasks = tasks;
+      if (displayTasks.isEmpty && deadlineStore.items.isNotEmpty) {
+        displayTasks = deadlineStore.items.map((item) {
+          final dueStr = item.dueDate != null
+              ? '${item.dueDate!.year}-${item.dueDate!.month.toString().padLeft(2, '0')}-${item.dueDate!.day.toString().padLeft(2, '0')}'
+              : null;
+          final id = _storeTaskId(item);
+          return PlannerTask(
+            id: id,
+            title: item.title,
+            course: item.courseName,
+            duration: item.difficulty,
+            completed: _demoCompletedIds.contains(id),
+            dueDate: dueStr,
+            difficulty: item.difficulty,
+            status: null,
+          );
+        }).toList();
+      }
+      // When API returns no deadlines, compute nearest from store
+      if (nearest == null && deadlineStore.items.isNotEmpty) {
+        DateTime? nearestDue;
+        DeadlineItem? nearestItem;
+        for (final item in deadlineStore.items) {
+          if (item.dueDate == null) continue;
+          final d = item.dueDate!;
+          if (d.isBefore(DateTime(now.year, now.month, now.day))) continue;
+          if (nearestDue == null || d.isBefore(nearestDue)) {
+            nearestDue = d;
+            nearestItem = item;
+          }
+        }
+        if (nearestItem != null && nearestDue != null) {
+          nearest = Deadline(
+            id: _storeTaskId(nearestItem),
+            title: nearestItem.title,
+            course: nearestItem.courseName,
+            dueDate: '${nearestDue.year}-${nearestDue.month.toString().padLeft(2, '0')}-${nearestDue.day.toString().padLeft(2, '0')}',
+            type: null,
+          );
+        }
+      }
       if (mounted) setState(() {
-        _tasks = tasks;
+        _tasks = displayTasks;
         _nearestDeadline = nearest;
         _loading = false;
       });
@@ -64,8 +126,178 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _toggleTask(String taskId, bool completed) async {
+    if (taskId.startsWith('store-')) {
+      setState(() {
+        if (completed) {
+          _demoCompletedIds.add(taskId);
+        } else {
+          _demoCompletedIds.remove(taskId);
+        }
+        _tasks = _tasks.map((t) {
+          if (t.id == taskId) return PlannerTask(id: t.id, title: t.title, course: t.course, duration: t.duration, completed: completed, dueDate: t.dueDate, difficulty: t.difficulty, status: t.status);
+          return t;
+        }).toList();
+      });
+      return;
+    }
     final ok = await PlannerApi.toggleTaskCompletion(taskId, completed);
     if (ok && mounted) _loadData();
+  }
+
+  void _showAddDeadlineExamChoice() {
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 340),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFFFFF),
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 16, offset: const Offset(0, 4)),
+            ],
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Add new',
+                style: TextStyle(
+                  fontFamily: 'Arimo',
+                  fontSize: 16,
+                  height: 1.5,
+                  color: Color(0xFF101828),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 16),
+              InkWell(
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.pushNamed(context, AppRoutes.addDeadline);
+                },
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFAFBCDD).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFAFBCDD).withOpacity(0.4)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFAFBCDD).withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.assignment_outlined, color: Color(0xFF7E93CC), size: 22),
+                      ),
+                      const SizedBox(width: 14),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Assignment / Task',
+                              style: TextStyle(
+                                fontFamily: 'Arimo',
+                                fontSize: 16,
+                                height: 1.5,
+                                color: Color(0xFF101828),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Add homework, projects, or other tasks',
+                              style: TextStyle(
+                                fontFamily: 'Arimo',
+                                fontSize: 13,
+                                height: 1.4,
+                                color: Color(0xFF6A7282),
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right, color: Color(0xFF99A1AF), size: 20),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              InkWell(
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.pushNamed(context, AppRoutes.courseAndExamInput);
+                },
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFAFBCDD).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFAFBCDD).withOpacity(0.4)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFAFBCDD).withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.quiz_outlined, color: Color(0xFF7E93CC), size: 22),
+                      ),
+                      const SizedBox(width: 14),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Exam',
+                              style: TextStyle(
+                                fontFamily: 'Arimo',
+                                fontSize: 16,
+                                height: 1.5,
+                                color: Color(0xFF101828),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Add midterms, finals, quizzes',
+                              style: TextStyle(
+                                fontFamily: 'Arimo',
+                                fontSize: 13,
+                                height: 1.4,
+                                color: Color(0xFF6A7282),
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right, color: Color(0xFF99A1AF), size: 20),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   String _formattedDate() {
@@ -284,7 +516,7 @@ class _HomePageState extends State<HomePage> {
                         children: [
                           Expanded(
                             child: InkWell(
-                              onTap: () {},
+                              onTap: _showAddDeadlineExamChoice,
                               borderRadius: BorderRadius.circular(8),
                               child: Container(
                                 height: 36,
@@ -298,7 +530,7 @@ class _HomePageState extends State<HomePage> {
                                     Icon(Icons.add, color: Color(0xFFFFFFFF), size: 16),
                                     SizedBox(width: 8),
                                     Text(
-                                      'Add Deadline',
+                                      'Add Deadline/Exam',
                                       style: TextStyle(
                                         fontFamily: 'Arimo',
                                         fontSize: 14,
@@ -315,7 +547,7 @@ class _HomePageState extends State<HomePage> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: InkWell(
-                              onTap: () {},
+                              onTap: () => Navigator.pushNamed(context, AppRoutes.editDeadlines),
                               borderRadius: BorderRadius.circular(8),
                               child: Container(
                                 height: 36,
@@ -329,7 +561,7 @@ class _HomePageState extends State<HomePage> {
                                     Icon(Icons.edit_outlined, color: Color(0xFF364153), size: 16),
                                     SizedBox(width: 8),
                                     Text(
-                                      'Edit Deadline',
+                                      'Edit Deadline/Exam',
                                       style: TextStyle(
                                         fontFamily: 'Arimo',
                                         fontSize: 14,

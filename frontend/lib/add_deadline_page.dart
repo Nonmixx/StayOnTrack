@@ -1,0 +1,452 @@
+import 'package:flutter/material.dart';
+import 'app_nav.dart';
+import 'routes.dart';
+import 'data/deadline_store.dart';
+
+/// Add Deadline screen. Opened from Home or Edit Deadlines.
+/// [editIndex] and initial fields set when editing an existing deadline.
+class AddDeadlinePage extends StatefulWidget {
+  const AddDeadlinePage({
+    super.key,
+    this.editIndex,
+    this.initialTitle,
+    this.initialCourse,
+    this.initialDueDate,
+    this.initialDifficulty,
+    this.initialIsIndividual,
+  });
+
+  final int? editIndex;
+  final String? initialTitle;
+  final String? initialCourse;
+  final DateTime? initialDueDate;
+  final String? initialDifficulty;
+  final bool? initialIsIndividual;
+
+  @override
+  State<AddDeadlinePage> createState() => _AddDeadlinePageState();
+}
+
+class _AddDeadlinePageState extends State<AddDeadlinePage> {
+  final _courseNameController = TextEditingController();
+  final _titleController = TextEditingController();
+  DateTime? _dueDate;
+  bool _isIndividual = true;
+  String? _selectedDifficulty;
+
+  static const _darkPurple = Color(0xFF4A5568);
+  static const _pageBackground = Color(0xFFFFF8F0);
+  static const _hintGray = Color(0xFF9CA3AF);
+  static const _buttonPurple = Color(0xFFAFBCDD);
+
+  static const _difficulties = ['Easy', 'Medium', 'Hard'];
+
+  bool get _isEditMode => widget.editIndex != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedDifficulty = widget.initialDifficulty ?? _difficulties[1];
+    _isIndividual = widget.initialIsIndividual ?? true;
+    _dueDate = widget.initialDueDate;
+    if (widget.initialTitle != null) _titleController.text = widget.initialTitle!;
+    if (widget.initialCourse != null) _courseNameController.text = widget.initialCourse!;
+  }
+
+  @override
+  void dispose() {
+    _courseNameController.dispose();
+    _titleController.dispose();
+    super.dispose();
+  }
+
+  String _formatDate(DateTime? date) {
+    if (date == null) return '';
+    final d = date.day.toString().padLeft(2, '0');
+    final m = date.month.toString().padLeft(2, '0');
+    final y = date.year.toString();
+    return '$d/$m/$y';
+  }
+
+  Future<void> _pickDate(BuildContext context) async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _dueDate ?? now,
+      firstDate: DateTime(now.year - 1, 1, 1),
+      lastDate: DateTime(now.year + 2, 12, 31),
+    );
+    if (picked != null && mounted) {
+      setState(() => _dueDate = picked);
+    }
+  }
+
+  void _submit() {
+    final course = _courseNameController.text.trim();
+    final title = _titleController.text.trim();
+    if (course.isEmpty || title.isEmpty) return;
+    final item = DeadlineItem(
+      title: title,
+      courseName: course,
+      dueDate: _dueDate,
+      difficulty: _selectedDifficulty ?? 'Medium',
+      isIndividual: _isIndividual,
+    );
+    if (_isEditMode) {
+      deadlineStore.updateAt(widget.editIndex!, item);
+      Navigator.of(context).pop();
+    } else {
+      deadlineStore.add(item);
+      _showSuccessDialog();
+    }
+  }
+
+  void _showSuccessDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Deadline added'),
+        content: const Text(
+          'New deadline successfully added. You can view or edit deadlines at the Edit Deadlines page.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop(); // close dialog only; stay on Add Deadline page
+            },
+            child: const Text('OK'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop(); // close dialog
+              Navigator.of(context).pop(); // leave Add Deadline page
+              Navigator.of(context).pushNamed(AppRoutes.editDeadlines);
+            },
+            child: const Text('View / Edit Deadlines'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _onBottomNavTap(int index) {
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    switch (index) {
+      case 0:
+        AppNav.navigateToHome?.call();
+        break;
+      case 1:
+        AppNav.navigateToPlanner?.call();
+        break;
+      case 2:
+        AppNav.navigateToGroup?.call();
+        break;
+      case 3:
+        AppNav.navigateToSettings?.call();
+        break;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _pageBackground,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.chevron_left, color: Colors.black87),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: Text(
+          _isEditMode ? 'Edit Deadline' : 'Add Deadline',
+          style: const TextStyle(
+            color: Colors.black87,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _isEditMode ? 'Edit Deadline' : 'Add New Deadline',
+                    style: const TextStyle(
+                      color: Colors.black87,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Divider(height: 1, color: Colors.grey.shade300),
+                  const SizedBox(height: 16),
+                  _LabeledField(
+                    label: 'Course Name',
+                    child: TextField(
+                      controller: _courseNameController,
+                      decoration: _inputDecoration('e.g. CS101'),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _LabeledField(
+                    label: 'Assignment / Project Title',
+                    child: TextField(
+                      controller: _titleController,
+                      decoration: _inputDecoration('e.g. Case Study Submission'),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _LabeledField(
+                    label: 'Due Date',
+                    child: InkWell(
+                      onTap: () => _pickDate(context),
+                      borderRadius: BorderRadius.circular(8),
+                      child: InputDecorator(
+                        decoration: InputDecoration(
+                          hintText: 'dd/mm/yyyy',
+                          hintStyle: const TextStyle(color: _hintGray),
+                          filled: true,
+                          fillColor: Colors.grey.shade50,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          suffixIcon: const Icon(Icons.calendar_today, color: _hintGray, size: 20),
+                        ),
+                        child: Text(
+                          _formatDate(_dueDate),
+                          style: TextStyle(
+                            color: _dueDate == null ? _hintGray : Colors.black87,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _LabeledField(
+                    label: 'Type',
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _TypeChip(
+                            label: 'Individual',
+                            selected: _isIndividual,
+                            onTap: () => setState(() => _isIndividual = true),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _TypeChip(
+                            label: 'Group',
+                            selected: !_isIndividual,
+                            onTap: () => setState(() => _isIndividual = false),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _LabeledField(
+                    label: 'Difficulty',
+                    child: DropdownButtonFormField<String>(
+                      value: _selectedDifficulty,
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Colors.grey.shade50,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                      items: _difficulties
+                          .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                          .toList(),
+                      onChanged: (v) => setState(() => _selectedDifficulty = v),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Center(
+                    child: SizedBox(
+                      height: 44,
+                      child: ElevatedButton(
+                        onPressed: _submit,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _buttonPurple,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: Text(_isEditMode ? 'Update Deadline' : 'Add Deadline'),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      bottomNavigationBar: Container(
+        color: Colors.white,
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _NavItem(icon: Icons.home, label: 'Home', onTap: () => _onBottomNavTap(0)),
+                _NavItem(icon: Icons.calendar_today_outlined, label: 'Planner', onTap: () => _onBottomNavTap(1)),
+                _NavItem(icon: Icons.people_outline, label: 'Group', onTap: () => _onBottomNavTap(2)),
+                _NavItem(icon: Icons.settings_outlined, label: 'Settings', onTap: () => _onBottomNavTap(3)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  InputDecoration _inputDecoration(String hint) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: const TextStyle(color: _hintGray),
+      filled: true,
+      fillColor: Colors.grey.shade50,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide(color: Colors.grey.shade300),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide(color: Colors.grey.shade300),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    );
+  }
+}
+
+class _LabeledField extends StatelessWidget {
+  const _LabeledField({required this.label, required this.child});
+
+  final String label;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            color: Colors.black87,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 8),
+        child,
+      ],
+    );
+  }
+}
+
+class _TypeChip extends StatelessWidget {
+  const _TypeChip({required this.label, required this.selected, required this.onTap});
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  static const _selectedBg = Color(0xFFC8CEDF);
+  static const _unselectedBg = Color(0xFFF0F0F0);
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? _selectedBg : _unselectedBg,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: TextStyle(
+              color: selected ? Colors.black87 : Colors.grey.shade700,
+              fontWeight: FontWeight.w500,
+              fontSize: 14,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NavItem extends StatelessWidget {
+  const _NavItem({required this.icon, required this.label, required this.onTap});
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  static const _navColor = Color(0xFF99A1AF);
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 24, color: _navColor),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: const TextStyle(fontSize: 12, color: _navColor),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

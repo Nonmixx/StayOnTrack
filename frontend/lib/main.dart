@@ -11,6 +11,13 @@ import 'ai_task_breakdown.dart';
 import 'ai_task_distribution.dart';
 import 'edit_setup.dart';
 import 'settings_page.dart';
+import 'semester_setup_page.dart';
+import 'course_and_exam_input.dart';
+import 'assignment_and_project_page.dart';
+import 'focus_and_energy_profile_page.dart';
+import 'add_deadline_page.dart';
+import 'edit_deadlines_page.dart';
+import 'routes.dart';
 
 void main() {
   runApp(const MyApp());
@@ -29,9 +36,32 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
         fontFamily: 'Roboto',
       ),
-      home: const MainNavigation(),
-
+      home: const SemesterSetupPage(),
       routes: {
+        AppRoutes.semesterSetup: (context) => const SemesterSetupPage(),
+        AppRoutes.courseAndExamInput: (context) =>
+            const CourseAndExamInputPage(),
+        AppRoutes.assignmentAndProject: (context) =>
+            const AssignmentAndProjectPage(),
+        AppRoutes.focusAndEnergyProfile: (context) =>
+            const FocusAndEnergyProfilePage(),
+        AppRoutes.addDeadline: (context) {
+          final a =
+              ModalRoute.of(context)?.settings.arguments
+                  as Map<String, dynamic>?;
+          if (a == null) return const AddDeadlinePage();
+          return AddDeadlinePage(
+            editIndex: a['editIndex'] as int?,
+            initialTitle: a['title'] as String?,
+            initialCourse: a['courseName'] as String?,
+            initialDueDate: a['dueDate'] as DateTime?,
+            initialDifficulty: a['difficulty'] as String?,
+            initialIsIndividual: a['isIndividual'] as bool?,
+          );
+        },
+        AppRoutes.editDeadlines: (context) => const EditDeadlinesPage(),
+        AppRoutes.home: (context) => const MainNavigation(),
+
         '/group-overview': (context) => const GroupPage(),
         '/group-assignment-setup': (context) => const AssignmentSetupPage(),
         '/task-breakdown': (context) => const TaskBreakdownPage(),
@@ -54,9 +84,17 @@ class _MainNavigationState extends State<MainNavigation> {
 
   static const int _settingsIndex = 3;
 
+  static const int _homeIndex = 0;
+  static const int _plannerIndex = 1;
+  static const int _groupIndex = 2;
+
   @override
   void initState() {
     super.initState();
+    AppNav.navigateToHome = () => setState(() => _selectedIndex = _homeIndex);
+    AppNav.navigateToPlanner = () =>
+        setState(() => _selectedIndex = _plannerIndex);
+    AppNav.navigateToGroup = () => setState(() => _selectedIndex = _groupIndex);
     AppNav.navigateToSettings = () =>
         setState(() => _selectedIndex = _settingsIndex);
   }

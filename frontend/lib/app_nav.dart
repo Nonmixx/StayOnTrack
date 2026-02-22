@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
-/// Global navigation: switch to Settings tab (same as bottom nav) instead of pushing a new page.
+/// Global navigation: switch main app tabs from pushed pages (e.g. Add Deadline).
 class AppNav {
+  static void Function()? navigateToHome;
+  static void Function()? navigateToPlanner;
+  static void Function()? navigateToGroup;
   static void Function()? navigateToSettings;
 
   static void goToSettings(BuildContext context) {
