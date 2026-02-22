@@ -46,7 +46,10 @@ class _AddDeadlinePageState extends State<AddDeadlinePage> {
   @override
   void initState() {
     super.initState();
-    _selectedDifficulty = widget.initialDifficulty ?? _difficulties[1];
+    final initial = widget.initialDifficulty;
+    _selectedDifficulty = (initial != null && _difficulties.contains(initial))
+        ? initial
+        : _difficulties[1];
     _isIndividual = widget.initialIsIndividual ?? true;
     _dueDate = widget.initialDueDate;
     if (widget.initialTitle != null) _titleController.text = widget.initialTitle!;

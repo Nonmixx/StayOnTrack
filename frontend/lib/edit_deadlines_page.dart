@@ -167,19 +167,49 @@ class _EditDeadlinesPageState extends State<EditDeadlinesPage> {
     );
   }
 
+  /// True if this deadline was added as an exam (difficulty stored as weight %).
+  bool _isExamEntry(DeadlineItem entry) {
+    if (entry.difficulty.isEmpty) return false;
+    if (!entry.difficulty.endsWith('%')) return false;
+    final numStr = entry.difficulty.substring(0, entry.difficulty.length - 1);
+    return int.tryParse(numStr) != null;
+  }
+
   void _onEdit(int index) {
     final entry = deadlineStore.items[index];
-    Navigator.of(context).pushNamed(
-      AppRoutes.addDeadline,
-      arguments: <String, dynamic>{
-        'editIndex': index,
-        'title': entry.title,
-        'courseName': entry.courseName,
-        'dueDate': entry.dueDate,
-        'difficulty': entry.difficulty,
-        'isIndividual': entry.isIndividual,
-      },
-    );
+    if (_isExamEntry(entry)) {
+      final weight = int.tryParse(
+        entry.difficulty.replaceAll(RegExp(r'[^0-9]'), ''),
+      ) ?? 0;
+      final examType = entry.title.contains(' - ')
+          ? entry.title.split(' - ').last.trim()
+          : 'Midterm';
+      Navigator.of(context).pushNamed(
+        AppRoutes.courseAndExamInput,
+        arguments: <String, dynamic>{
+          'fromHomeAdd': true,
+          'fromEditDeadlinesPage': true,
+          'editDeadlineIndex': index,
+          'editDeadlineCourse': entry.courseName,
+          'editDeadlineTitle': entry.title,
+          'editDeadlineDueDate': entry.dueDate,
+          'editDeadlineWeight': weight,
+          'editDeadlineExamType': examType,
+        },
+      );
+    } else {
+      Navigator.of(context).pushNamed(
+        AppRoutes.addDeadline,
+        arguments: <String, dynamic>{
+          'editIndex': index,
+          'title': entry.title,
+          'courseName': entry.courseName,
+          'dueDate': entry.dueDate,
+          'difficulty': entry.difficulty,
+          'isIndividual': entry.isIndividual,
+        },
+      );
+    }
   }
 
   void _onDelete(int index) {

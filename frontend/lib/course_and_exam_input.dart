@@ -21,6 +21,7 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
   int? _editingIndex;
   bool _fromHomeAdd = false;
   bool _fromEditDeadlinesPage = false;
+  int? _editingDeadlineStoreIndex;
 
   // Match home_page.dart Actions: Next = Weekly Check-in, Skip = Add Deadline
   static const _nextButtonColor = Color(0xFF9C9EC3); // Weekly Check-in
@@ -47,6 +48,24 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
     final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
     _fromHomeAdd = args?['fromHomeAdd'] == true;
     _fromEditDeadlinesPage = args?['fromEditDeadlinesPage'] == true;
+    final editIdx = args?['editDeadlineIndex'] as int?;
+    if (editIdx != null && _editingDeadlineStoreIndex == null) {
+      _editingDeadlineStoreIndex = editIdx;
+      _fromHomeAdd = true;
+      _courseNameController.text = args?['editDeadlineCourse'] as String? ?? '';
+      _examDate = args?['editDeadlineDueDate'] as DateTime?;
+      final weight = args?['editDeadlineWeight'] as int? ?? 0;
+      _weightValue = weight.clamp(0, 100);
+      _weightController.text = '$_weightValue';
+      final type = args?['editDeadlineExamType'] as String? ?? 'Midterm';
+      if (_examTypes.contains(type)) {
+        _selectedExamType = type;
+        _otherTypeController.clear();
+      } else {
+        _selectedExamType = 'Other';
+        _otherTypeController.text = type;
+      }
+    }
   }
 
   void _syncWeightFromController() {
@@ -106,13 +125,29 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
   void _addExam() {
     final course = _courseNameController.text.trim();
     if (course.isEmpty) return;
-    final wasAdding = _editingIndex == null;
+    final wasAdding = _editingIndex == null && _editingDeadlineStoreIndex == null;
     final entry = _ExamEntry(
       courseName: course,
       examType: _effectiveExamType,
       date: _examDate,
       weight: _weightValue,
     );
+    if (_editingDeadlineStoreIndex != null) {
+      final index = _editingDeadlineStoreIndex!;
+      deadlineStore.updateAt(index, DeadlineItem(
+        title: '$course - ${entry.examType}',
+        courseName: course,
+        dueDate: entry.date,
+        difficulty: '${entry.weight}%',
+        isIndividual: true,
+      ));
+      setState(() {
+        _editingDeadlineStoreIndex = null;
+        _clearForm();
+      });
+      Navigator.of(context).pop();
+      return;
+    }
     setState(() {
       if (_editingIndex != null) {
         _exams[_editingIndex!] = entry;
@@ -207,45 +242,51 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
     return Scaffold(
       backgroundColor: _pageBackground,
       appBar: AppBar(
-        backgroundColor: _pageBackground,
+        backgroundColor: _fromHomeAdd ? Colors.white : _pageBackground,
         elevation: 0,
+        centerTitle: _fromHomeAdd,
         leading: IconButton(
-          icon: const Icon(Icons.chevron_left),
+          icon: Icon(
+            Icons.chevron_left,
+            color: _fromHomeAdd ? Colors.black87 : _darkPurple,
+          ),
           onPressed: () => Navigator.of(context).pop(),
           style: IconButton.styleFrom(
-            foregroundColor: _darkPurple,
+            foregroundColor: _fromHomeAdd ? Colors.black87 : _darkPurple,
           ),
         ),
-        title: const Text(
-          'Back',
+        title: Text(
+          _fromHomeAdd ? 'Add Exam' : 'Back',
           style: TextStyle(
-            color: _darkPurple,
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
+            color: _fromHomeAdd ? Colors.black87 : _darkPurple,
+            fontSize: _fromHomeAdd ? 18 : 16,
+            fontWeight: _fromHomeAdd ? FontWeight.w600 : FontWeight.w500,
           ),
         ),
-        titleSpacing: 0,
+        titleSpacing: _fromHomeAdd ? null : 0,
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
           final padding = constraints.maxWidth > 600 ? 24.0 : 16.0;
+          final topPadding = _fromHomeAdd ? 20.0 : 0.0;
           return SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(padding, 0, padding, 32),
+            padding: EdgeInsets.fromLTRB(padding, topPadding, padding, 32),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Title
-                Center(
-                  child: Text(
-                    'Exam Schedule',
-                    style: TextStyle(
-                      color: _titlePurple,
-                      fontSize: 26,
-                      fontWeight: FontWeight.bold,
+                if (!_fromHomeAdd) ...[
+                  Center(
+                    child: Text(
+                      'Exam Schedule',
+                      style: TextStyle(
+                        color: _titlePurple,
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 24),
+                  const SizedBox(height: 24),
+                ],
 
                 // Add New Exam card
                 _SectionCard(
@@ -390,7 +431,7 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
                           child: ElevatedButton.icon(
                             onPressed: _addExam,
                             icon: Icon(_editingIndex != null ? Icons.check : Icons.add, size: 20),
-                            label: Text(_editingIndex != null ? 'Update Exam' : 'Add Exam'),
+                            label: Text((_editingIndex != null || _editingDeadlineStoreIndex != null) ? 'Update Exam' : 'Add Exam'),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: _lightPurple,
                               foregroundColor: Colors.white,
