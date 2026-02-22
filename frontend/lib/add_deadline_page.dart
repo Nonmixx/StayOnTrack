@@ -195,17 +195,14 @@ class _AddDeadlinePageState extends State<AddDeadlinePage> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
+        centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.chevron_left, color: Colors.black87),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
           _isEditMode ? 'Edit Deadline' : 'Add Deadline',
-          style: const TextStyle(
-            color: Colors.black87,
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
+          style: const TextStyle(color: Colors.black87, fontSize: 18, fontWeight: FontWeight.w600),
         ),
       ),
       body: SingleChildScrollView(
@@ -249,7 +246,7 @@ class _AddDeadlinePageState extends State<AddDeadlinePage> {
                   ),
                   const SizedBox(height: 16),
                   _LabeledField(
-                    label: 'Assignment / Project Title',
+                    label: 'Assignment / Task Title',
                     child: TextField(
                       controller: _titleController,
                       decoration: _inputDecoration('e.g. Case Study Submission'),
@@ -360,22 +357,22 @@ class _AddDeadlinePageState extends State<AddDeadlinePage> {
           ],
         ),
       ),
-      bottomNavigationBar: Container(
-        color: Colors.white,
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _NavItem(icon: Icons.home, label: 'Home', onTap: () => _onBottomNavTap(0)),
-                _NavItem(icon: Icons.calendar_today_outlined, label: 'Planner', onTap: () => _onBottomNavTap(1)),
-                _NavItem(icon: Icons.people_outline, label: 'Group', onTap: () => _onBottomNavTap(2)),
-                _NavItem(icon: Icons.settings_outlined, label: 'Settings', onTap: () => _onBottomNavTap(3)),
-              ],
-            ),
-          ),
-        ),
+      bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
+        backgroundColor: const Color(0xFFFFFFFF),
+        selectedItemColor: const Color(0xFFAFBCDD),
+        unselectedItemColor: const Color(0xFF99A1AF),
+        selectedFontSize: 12,
+        unselectedFontSize: 12,
+        iconSize: 24,
+        currentIndex: 0,
+        onTap: _onBottomNavTap,
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home_outlined, size: 24), label: 'Home'),
+          BottomNavigationBarItem(icon: Icon(Icons.calendar_today_outlined, size: 24), label: 'Planner'),
+          BottomNavigationBarItem(icon: Icon(Icons.people_outline, size: 24), label: 'Group'),
+          BottomNavigationBarItem(icon: Icon(Icons.settings_outlined, size: 24), label: 'Settings'),
+        ],
       ),
     );
   }
@@ -460,34 +457,3 @@ class _TypeChip extends StatelessWidget {
   }
 }
 
-class _NavItem extends StatelessWidget {
-  const _NavItem({required this.icon, required this.label, required this.onTap});
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  static const _navColor = Color(0xFF99A1AF);
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 24, color: _navColor),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: const TextStyle(fontSize: 12, color: _navColor),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

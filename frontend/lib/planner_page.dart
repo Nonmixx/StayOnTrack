@@ -61,20 +61,13 @@ class _PlannerPageState extends State<PlannerPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFFFF8F0),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFFFFFFF),
-        elevation: 1,
-        shadowColor: Colors.black.withOpacity(0.1),
+        backgroundColor: Colors.white,
+        elevation: 0,
         automaticallyImplyLeading: false,
         centerTitle: true,
         title: const Text(
           'Planner',
-          style: TextStyle(
-            fontFamily: 'Arimo',
-            fontSize: 20,
-            height: 1.2,
-            color: Color(0xFF101828),
-            fontWeight: FontWeight.w400,
-          ),
+          style: TextStyle(color: Colors.black87, fontSize: 18, fontWeight: FontWeight.w600),
         ),
       ),
       body: _loading
