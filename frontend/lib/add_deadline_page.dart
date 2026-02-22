@@ -102,31 +102,72 @@ class _AddDeadlinePageState extends State<AddDeadlinePage> {
   }
 
   void _showSuccessDialog() {
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Deadline added'),
-        content: const Text(
-          'New deadline successfully added. You can view or edit deadlines at the Edit Deadlines page.',
+    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    final fromHomeAdd = args?['fromHomeAdd'] == true;
+    final fromEditDeadlinesPage = args?['fromEditDeadlinesPage'] == true;
+
+    if (fromHomeAdd) {
+      showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Assignment/Task added'),
+          content: const Text(
+            'A new Assignment/Task has been added successfully.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // close dialog
+                if (fromEditDeadlinesPage) {
+                  Navigator.of(context).pop(); // leave Add Deadline page
+                  Navigator.of(context).pop(); // leave Edit Deadline/Exam page → home
+                } else {
+                  Navigator.of(context).pop(); // leave Add Deadline page → home
+                }
+              },
+              child: const Text('OK'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // close dialog
+                Navigator.of(context).pop(); // leave Add Deadline page
+                if (!fromEditDeadlinesPage) {
+                  Navigator.of(context).pushNamed(AppRoutes.editDeadlines);
+                }
+                // if fromEditDeadlinesPage we're already on Edit Deadline/Exam page
+              },
+              child: const Text('View/Manage Deadline'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop(); // close dialog only; stay on Add Deadline page
-            },
-            child: const Text('OK'),
+      );
+    } else {
+      showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Deadline added'),
+          content: const Text(
+            'New deadline successfully added. You can view or edit deadlines at the Edit Deadlines page.',
           ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop(); // close dialog
-              Navigator.of(context).pop(); // leave Add Deadline page
-              Navigator.of(context).pushNamed(AppRoutes.editDeadlines);
-            },
-            child: const Text('View / Edit Deadlines'),
-          ),
-        ],
-      ),
-    );
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // close dialog only; stay on Add Deadline page
+              },
+              child: const Text('OK'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // close dialog
+                Navigator.of(context).pop(); // leave Add Deadline page
+                Navigator.of(context).pushNamed(AppRoutes.editDeadlines);
+              },
+              child: const Text('View / Edit Deadlines'),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   void _onBottomNavTap(int index) {

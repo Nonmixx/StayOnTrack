@@ -179,7 +179,7 @@ class _HomePageState extends State<HomePage> {
               InkWell(
                 onTap: () {
                   Navigator.pop(context);
-                  Navigator.pushNamed(context, AppRoutes.addDeadline);
+                  Navigator.pushNamed(context, AppRoutes.addDeadline, arguments: {'fromHomeAdd': true});
                 },
                 borderRadius: BorderRadius.circular(10),
                 child: Container(
@@ -238,7 +238,7 @@ class _HomePageState extends State<HomePage> {
               InkWell(
                 onTap: () {
                   Navigator.pop(context);
-                  Navigator.pushNamed(context, AppRoutes.courseAndExamInput);
+                  Navigator.pushNamed(context, AppRoutes.courseAndExamInput, arguments: {'fromHomeAdd': true});
                 },
                 borderRadius: BorderRadius.circular(10),
                 child: Container(

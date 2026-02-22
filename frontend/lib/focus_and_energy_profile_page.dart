@@ -10,9 +10,10 @@ class FocusAndEnergyProfilePage extends StatefulWidget {
 }
 
 class _FocusAndEnergyProfilePageState extends State<FocusAndEnergyProfilePage> {
-  final Set<int> _peakFocusIndices = {};   // 0-4, multi-select
-  final Set<int> _lowEnergyIndices = {};   // 0-4, multi-select (no overlap with peak)
-  int? _studyDurationIndex; // 0-4
+  final Set<int> _peakFocusIndices = {};   // multi-select (no overlap with low energy)
+  final Set<int> _lowEnergyIndices = {};   // multi-select (no overlap with peak)
+  int? _studyDurationIndex; // 0 = 20 min, ... 6 = Other
+  final _otherDurationController = TextEditingController();
 
   static const _titlePurple = Color(0xFF7E93CC);
   static const _darkPurple = Color(0xFF4A5568);
@@ -29,22 +30,36 @@ class _FocusAndEnergyProfilePageState extends State<FocusAndEnergyProfilePage> {
     'Afternoon (12pm - 5pm)',
     'Evening (5pm - 9pm)',
     'Late Night (9pm - 1am)',
+    'Overnight (1am - 6am)',
   ];
 
   static const _studyDurationOptions = [
+    '20 minutes',
     '30 minutes',
     '45 minutes',
     '1 hour',
     '1.5 hours',
     '2 hours+',
+    'Other',
   ];
+
+  bool get _isOtherDuration => _studyDurationIndex == _studyDurationOptions.length - 1;
+  bool get _hasOtherDurationValue => _otherDurationController.text.trim().isNotEmpty;
+  bool get _canGeneratePlan => !_isOtherDuration || _hasOtherDurationValue;
 
   @override
   void initState() {
     super.initState();
     _peakFocusIndices.add(3);   // Evening
     _lowEnergyIndices.add(2);   // Afternoon (different from peak)
-    _studyDurationIndex = 1;    // 45 minutes selected
+    _studyDurationIndex = 2;    // 45 minutes selected (index 2 in new list)
+    _otherDurationController.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _otherDurationController.dispose();
+    super.dispose();
   }
 
   void _togglePeakFocus(int i) {
@@ -107,21 +122,29 @@ class _FocusAndEnergyProfilePageState extends State<FocusAndEnergyProfilePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  'Focus & Energy Profile',
-                  style: TextStyle(
-                    color: _titlePurple,
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Help our AI understand your study habits to optimize your schedule.',
-                  style: TextStyle(
-                    color: _darkPurple.withValues(alpha: 0.8),
-                    fontSize: 15,
-                    height: 1.4,
+                Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Focus & Energy Profile',
+                        style: TextStyle(
+                          color: _titlePurple,
+                          fontSize: 26,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Help our AI understand your study habits to optimize your schedule.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: _darkPurple.withValues(alpha: 0.8),
+                          fontSize: 15,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -170,17 +193,52 @@ class _FocusAndEnergyProfilePageState extends State<FocusAndEnergyProfilePage> {
                 _DottedBorderSectionCard(
                   title: 'Typical Study Duration',
                   question: 'How long can you study before needing a break?',
-                  child: Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: List.generate(_studyDurationOptions.length, (i) {
-                      final selected = _studyDurationIndex == i;
-                      return _TimeChip(
-                        label: _studyDurationOptions[i],
-                        selected: selected,
-                        onTap: () => setState(() => _studyDurationIndex = i),
-                      );
-                    }),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: List.generate(_studyDurationOptions.length, (i) {
+                          final selected = _studyDurationIndex == i;
+                          return _TimeChip(
+                            label: _studyDurationOptions[i],
+                            selected: selected,
+                            onTap: () => setState(() => _studyDurationIndex = i),
+                          );
+                        }),
+                      ),
+                      if (_studyDurationIndex == _studyDurationOptions.length - 1) ...[
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: 200,
+                          child: TextField(
+                            controller: _otherDurationController,
+                            decoration: InputDecoration(
+                              hintText: 'e.g. 90 minutes',
+                              hintStyle: const TextStyle(color: _hintGray, fontSize: 14),
+                              filled: true,
+                              fillColor: Colors.grey.shade50,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: Colors.grey.shade300),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: Colors.grey.shade300),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            ),
+                            style: const TextStyle(
+                              color: _darkPurple,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
                 const SizedBox(height: 32),
@@ -188,7 +246,7 @@ class _FocusAndEnergyProfilePageState extends State<FocusAndEnergyProfilePage> {
                 SizedBox(
                   height: 52,
                   child: ElevatedButton(
-                    onPressed: () => _generatePlan(context),
+                    onPressed: _canGeneratePlan ? () => _generatePlan(context) : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _buttonPurple,
                       foregroundColor: Colors.white,

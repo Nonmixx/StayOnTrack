@@ -19,6 +19,8 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
   int _weightValue = 0;
   final List<_ExamEntry> _exams = [];
   int? _editingIndex;
+  bool _fromHomeAdd = false;
+  bool _fromEditDeadlinesPage = false;
 
   // Match home_page.dart Actions: Next = Weekly Check-in, Skip = Add Deadline
   static const _nextButtonColor = Color(0xFF9C9EC3); // Weekly Check-in
@@ -37,6 +39,14 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
     _selectedExamType ??= _examTypes.first;
     _weightController.text = '0';
     _weightController.addListener(_syncWeightFromController);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    _fromHomeAdd = args?['fromHomeAdd'] == true;
+    _fromEditDeadlinesPage = args?['fromEditDeadlinesPage'] == true;
   }
 
   void _syncWeightFromController() {
@@ -96,6 +106,7 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
   void _addExam() {
     final course = _courseNameController.text.trim();
     if (course.isEmpty) return;
+    final wasAdding = _editingIndex == null;
     final entry = _ExamEntry(
       courseName: course,
       examType: _effectiveExamType,
@@ -118,6 +129,44 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
       }
       _clearForm();
     });
+    if (_fromHomeAdd && wasAdding && mounted) _showExamSuccessDialog();
+  }
+
+  void _showExamSuccessDialog() {
+    final fromEditDeadlinesPage = _fromEditDeadlinesPage;
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Exam added'),
+        content: const Text(
+          'A new Exam has been added successfully.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop(); // close dialog
+              Navigator.of(context).pop(); // leave Exam page
+              if (fromEditDeadlinesPage) {
+                Navigator.of(context).pop(); // leave Edit Deadline/Exam page → home
+              }
+              // else already at home
+            },
+            child: const Text('OK'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop(); // close dialog
+              Navigator.of(context).pop(); // leave Exam page
+              if (!fromEditDeadlinesPage) {
+                Navigator.of(context).pushNamed(AppRoutes.editDeadlines);
+              }
+              // if fromEditDeadlinesPage we're already on Edit Deadline/Exam page
+            },
+            child: const Text('View/Manage Exam'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _clearForm() {
@@ -356,82 +405,82 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
-
-                // Scheduled Exams card
-                _SectionCard(
-                  title: 'Scheduled Exams (${_exams.length})',
-                  child: _exams.isEmpty
-                      ? Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 24),
-                          child: Center(
-                            child: Text(
-                              'No exams added yet. Add your first exam to get started.',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: _hintGray,
+                if (!_fromHomeAdd) ...[
+                  const SizedBox(height: 16),
+                  // Scheduled Exams card
+                  _SectionCard(
+                    title: 'Scheduled Exams (${_exams.length})',
+                    child: _exams.isEmpty
+                        ? Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 24),
+                            child: Center(
+                              child: Text(
+                                'No exams added yet. Add your first exam to get started.',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: _hintGray,
+                                ),
+                                textAlign: TextAlign.center,
                               ),
-                              textAlign: TextAlign.center,
+                            ),
+                          )
+                        : ListView.separated(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: _exams.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: 12),
+                            itemBuilder: (context, i) => _ScheduledExamCard(
+                              entry: _exams[i],
+                              formatDateLong: _formatDateLong,
+                              onEdit: () => _editExam(i),
+                              onDelete: () => _deleteExam(i),
                             ),
                           ),
-                        )
-                      : ListView.separated(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: _exams.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 12),
-                          itemBuilder: (context, i) => _ScheduledExamCard(
-                            entry: _exams[i],
-                            formatDateLong: _formatDateLong,
-                            onEdit: () => _editExam(i),
-                            onDelete: () => _deleteExam(i),
-                          ),
-                        ),
-                ),
-                const SizedBox(height: 32),
-
-                // Footer: Skip always allowed; Next only when at least one exam is added
-                Row(
-                  children: [
-                    Expanded(
-                      child: SizedBox(
-                        height: 52,
-                        child: ElevatedButton(
-                          onPressed: () => _goToHome(context),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _skipButtonColor,
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                  ),
+                  const SizedBox(height: 32),
+                  // Footer: Skip always allowed; Next only when at least one exam is added
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SizedBox(
+                          height: 52,
+                          child: ElevatedButton(
+                            onPressed: () => _goToHome(context),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _skipButtonColor,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                             ),
+                            child: const Text('Skip to Assignments'),
                           ),
-                          child: const Text('Skip to Assignments'),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: SizedBox(
-                        height: 52,
-                        child: ElevatedButton(
-                          onPressed: _exams.isNotEmpty ? () => _goToHome(context) : null,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _nextButtonColor,
-                            disabledBackgroundColor: Colors.grey.shade300,
-                            foregroundColor: Colors.white,
-                            disabledForegroundColor: Colors.grey.shade600,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: SizedBox(
+                          height: 52,
+                          child: ElevatedButton(
+                            onPressed: _exams.isNotEmpty ? () => _goToHome(context) : null,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _nextButtonColor,
+                              disabledBackgroundColor: Colors.grey.shade300,
+                              foregroundColor: Colors.white,
+                              disabledForegroundColor: Colors.grey.shade600,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                             ),
+                            child: const Text('Next'),
                           ),
-                          child: const Text('Next'),
                         ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+                ],
               ],
             ),
           );

@@ -82,7 +82,7 @@ class _EditDeadlinesPageState extends State<EditDeadlinesPage> {
               InkWell(
                 onTap: () {
                   Navigator.pop(ctx);
-                  Navigator.of(context).pushNamed(AppRoutes.addDeadline);
+                  Navigator.of(context).pushNamed(AppRoutes.addDeadline, arguments: {'fromHomeAdd': true, 'fromEditDeadlinesPage': true});
                 },
                 borderRadius: BorderRadius.circular(10),
                 child: Container(
@@ -123,7 +123,7 @@ class _EditDeadlinesPageState extends State<EditDeadlinesPage> {
               InkWell(
                 onTap: () {
                   Navigator.pop(ctx);
-                  Navigator.of(context).pushNamed(AppRoutes.courseAndExamInput);
+                  Navigator.of(context).pushNamed(AppRoutes.courseAndExamInput, arguments: {'fromHomeAdd': true, 'fromEditDeadlinesPage': true});
                 },
                 borderRadius: BorderRadius.circular(10),
                 child: Container(

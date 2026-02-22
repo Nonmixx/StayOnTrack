@@ -164,7 +164,7 @@ class _AssignmentAndProjectPageState extends State<AssignmentAndProjectPage> {
               children: [
                 Center(
                   child: Text(
-                    'Assignments & Task',
+                    'Assignments & Tasks',
                     style: TextStyle(
                       color: _titlePurple,
                       fontSize: 26,
