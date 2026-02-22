@@ -164,7 +164,7 @@ class _AssignmentAndProjectPageState extends State<AssignmentAndProjectPage> {
               children: [
                 Center(
                   child: Text(
-                    'Assignments & Projects',
+                    'Assignments & Task',
                     style: TextStyle(
                       color: _titlePurple,
                       fontSize: 26,
@@ -175,7 +175,7 @@ class _AssignmentAndProjectPageState extends State<AssignmentAndProjectPage> {
                 const SizedBox(height: 24),
 
                 _SectionCard(
-                  title: 'Add New Assignment',
+                  title: 'Add New Assignment/Task',
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -195,13 +195,13 @@ class _AssignmentAndProjectPageState extends State<AssignmentAndProjectPage> {
                       ),
                       const SizedBox(height: 16),
                       _LabeledField(
-                        label: 'Assignment Name',
+                        label: 'Assignment/Task Name',
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             TextField(
                               controller: _assignmentNameController,
-                              decoration: _inputDecoration(hint: 'Enter Assignment'),
+                              decoration: _inputDecoration(hint: 'Enter Assignment/Task'),
                             ),
                             const SizedBox(height: 6),
                             _hint('e.g. Network Documentation'),
@@ -294,7 +294,7 @@ class _AssignmentAndProjectPageState extends State<AssignmentAndProjectPage> {
                         child: ElevatedButton.icon(
                           onPressed: _addAssignment,
                           icon: Icon(_editingIndex != null ? Icons.check : Icons.add, size: 20),
-                          label: Text(_editingIndex != null ? 'Update Assignment' : 'Add Assignment'),
+                          label: Text(_editingIndex != null ? 'Update Assignment/Task' : 'Add Assignment/Task'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: _lightPurple,
                             foregroundColor: Colors.white,
@@ -311,13 +311,13 @@ class _AssignmentAndProjectPageState extends State<AssignmentAndProjectPage> {
                 const SizedBox(height: 16),
 
                 _SectionCard(
-                  title: 'Added Assignments (${_assignments.length})',
+                  title: 'Added Assignments/Tasks (${_assignments.length})',
                   child: _assignments.isEmpty
                       ? Padding(
                           padding: const EdgeInsets.symmetric(vertical: 24),
                           child: Center(
                             child: Text(
-                              'No assignments added yet. Add your upcoming deadlines.',
+                              'No assignments/tasks added yet. Add your upcoming deadlines.',
                               style: TextStyle(fontSize: 14, color: _hintGray),
                               textAlign: TextAlign.center,
                             ),

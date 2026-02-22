@@ -144,6 +144,162 @@ class _HomePageState extends State<HomePage> {
     if (ok && mounted) _loadData();
   }
 
+  void _showAddDeadlineExamChoice() {
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 340),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFFFFF),
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 16, offset: const Offset(0, 4)),
+            ],
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Add new',
+                style: TextStyle(
+                  fontFamily: 'Arimo',
+                  fontSize: 16,
+                  height: 1.5,
+                  color: Color(0xFF101828),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 16),
+              InkWell(
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.pushNamed(context, AppRoutes.addDeadline);
+                },
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFAFBCDD).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFAFBCDD).withOpacity(0.4)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFAFBCDD).withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.assignment_outlined, color: Color(0xFF7E93CC), size: 22),
+                      ),
+                      const SizedBox(width: 14),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Assignment / Task',
+                              style: TextStyle(
+                                fontFamily: 'Arimo',
+                                fontSize: 16,
+                                height: 1.5,
+                                color: Color(0xFF101828),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Add homework, projects, or other tasks',
+                              style: TextStyle(
+                                fontFamily: 'Arimo',
+                                fontSize: 13,
+                                height: 1.4,
+                                color: Color(0xFF6A7282),
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right, color: Color(0xFF99A1AF), size: 20),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              InkWell(
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.pushNamed(context, AppRoutes.courseAndExamInput);
+                },
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFAFBCDD).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFAFBCDD).withOpacity(0.4)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFAFBCDD).withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.quiz_outlined, color: Color(0xFF7E93CC), size: 22),
+                      ),
+                      const SizedBox(width: 14),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Exam',
+                              style: TextStyle(
+                                fontFamily: 'Arimo',
+                                fontSize: 16,
+                                height: 1.5,
+                                color: Color(0xFF101828),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Add midterms, finals, quizzes',
+                              style: TextStyle(
+                                fontFamily: 'Arimo',
+                                fontSize: 13,
+                                height: 1.4,
+                                color: Color(0xFF6A7282),
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right, color: Color(0xFF99A1AF), size: 20),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   String _formattedDate() {
     final now = DateTime.now();
     return '${CalendarUtils.weekdayName(now)}, ${CalendarUtils.monthName(now.month)} ${now.day}, ${now.year}';
@@ -360,7 +516,7 @@ class _HomePageState extends State<HomePage> {
                         children: [
                           Expanded(
                             child: InkWell(
-                              onTap: () => Navigator.pushNamed(context, AppRoutes.addDeadline),
+                              onTap: _showAddDeadlineExamChoice,
                               borderRadius: BorderRadius.circular(8),
                               child: Container(
                                 height: 36,
@@ -374,7 +530,7 @@ class _HomePageState extends State<HomePage> {
                                     Icon(Icons.add, color: Color(0xFFFFFFFF), size: 16),
                                     SizedBox(width: 8),
                                     Text(
-                                      'Add Deadline',
+                                      'Add Deadline/Exam',
                                       style: TextStyle(
                                         fontFamily: 'Arimo',
                                         fontSize: 14,
@@ -405,7 +561,7 @@ class _HomePageState extends State<HomePage> {
                                     Icon(Icons.edit_outlined, color: Color(0xFF364153), size: 16),
                                     SizedBox(width: 8),
                                     Text(
-                                      'Edit Deadline',
+                                      'Edit Deadline/Exam',
                                       style: TextStyle(
                                         fontFamily: 'Arimo',
                                         fontSize: 14,
