@@ -1,117 +1,163 @@
 import 'package:flutter/material.dart';
 
 /// Page 6.1 - Group Overview
-/// Displays a list of all group assignments with their status
 class GroupPage extends StatelessWidget {
   const GroupPage({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFFFF8F0),
       appBar: AppBar(
-        title: const Text('Group'),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0,
-      ),
-      body: Column(
-        children: [
-          // Group Assignments List Section
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                const Text(
-                  'Group Assignments',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 16),
-
-                // Group Assignment Card 1
-                _buildGroupCard(
-                  context: context,
-                  courseCode: 'MKT305',
-                  groupName: 'MarketMinds',
-                  assignmentTitle: 'Marketing Strategy Deck',
-                  deadline: 'Due 15 Nov',
-                  status: 'On track',
-                  statusColor: Colors.green,
-                  memberInitials: ['A', 'S', 'M'],
-                ),
-                const SizedBox(height: 16),
-
-                // Group Assignment Card 2
-                _buildGroupCard(
-                  context: context,
-                  courseCode: 'CS450',
-                  groupName: 'UI Dreamers',
-                  assignmentTitle: 'Mobile App Prototype',
-                  deadline: 'Due 30 Oct',
-                  status: 'At risk',
-                  statusColor: Colors.red,
-                  memberInitials: ['J', 'E'],
-                ),
-              ],
-            ),
+        title: const Text(
+          'Group',
+          style: TextStyle(
+            fontFamily: 'Arimo',
+            fontSize: 20,
+            fontWeight: FontWeight.w400,
+            color: Color(0xFF101828),
           ),
-
-          // New Group Assignment Button Section
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  // Navigate to Page 6.2 - Assignment Setup
-                  Navigator.pushNamed(context, '/group-assignment-setup');
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF9FA8DA),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+        ),
+        backgroundColor: const Color(0xFFFFFFFF),
+        elevation: 1,
+        shadowColor: Colors.black12,
+        centerTitle: true,
+        automaticallyImplyLeading: false,
+      ),
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFFFFF),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 3,
+                      offset: const Offset(0, 1),
+                    ),
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 2,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
                 ),
-                child: const Text(
-                  '+ New Group Assignment',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Group Assignments',
+                      style: TextStyle(
+                        fontFamily: 'Arimo',
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF101828),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // ── CHANGED: pass assignmentId + all card data ──
+                    _buildGroupCard(
+                      context: context,
+                      assignmentId: 'assignment-001', // real id from backend
+                      courseCode: 'MKT305',
+                      groupName: 'MarketMinds',
+                      assignmentTitle: 'Marketing Strategy Deck',
+                      deadline: 'Due 15 Nov',
+                      status: 'On track',
+                      statusColor: const Color(0xFF008236),
+                      statusBgColor: const Color(0xFFDBFCE7),
+                      memberInitials: ['A', 'S', 'M'],
+                    ),
+                    const SizedBox(height: 16),
+
+                    _buildGroupCard(
+                      context: context,
+                      assignmentId: 'assignment-002', // real id from backend
+                      courseCode: 'CS450',
+                      groupName: 'UI Dreamers',
+                      assignmentTitle: 'Mobile App Prototype',
+                      deadline: 'Due 30 Oct',
+                      status: 'At risk',
+                      statusColor: const Color(0xFFE70030),
+                      statusBgColor: const Color(0xFFFEE2E2),
+                      memberInitials: ['J', 'E'],
+                    ),
+                  ],
                 ),
               ),
-            ),
-          ),
-        ],
-      ),
 
-      // Bottom Navigation Bar
-      bottomNavigationBar: _buildBottomNavBar(context, selectedIndex: 2),
+              const SizedBox(height: 16),
+
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pushNamed(context, '/group-assignment-setup');
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFAFBCDD),
+                    foregroundColor: const Color(0xFFFFFFFF),
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: const Text(
+                    '+ New Group Assignment',
+                    style: TextStyle(
+                      fontFamily: 'Arimo',
+                      fontSize: 16,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
-  /// Builds individual group assignment card
   Widget _buildGroupCard({
     required BuildContext context,
+    required String assignmentId, // ── CHANGED: added assignmentId param ──
     required String courseCode,
     required String groupName,
     required String assignmentTitle,
     required String deadline,
     required String status,
     required Color statusColor,
+    required Color statusBgColor,
     required List<String> memberInitials,
   }) {
     return GestureDetector(
+      // ── CHANGED: pass assignmentId as route argument ──
       onTap: () {
-        // Navigate to Page 6.4 - Task Distribution (or detail page)
-        Navigator.pushNamed(context, '/task-distribution');
+        Navigator.pushNamed(
+          context,
+          '/task-distribution',
+          arguments: {'assignmentId': assignmentId},
+        );
       },
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: const Color(0xFFFFFFFF),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade200),
+          border: Border.all(color: const Color(0xFFE7E6EB), width: 1),
           boxShadow: [
             BoxShadow(
-              color: Colors.grey.shade100,
-              blurRadius: 4,
+              color: const Color(0xFF000000).withOpacity(0.06),
+              blurRadius: 8,
               offset: const Offset(0, 2),
             ),
           ],
@@ -120,33 +166,34 @@ class GroupPage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Course Code and Status Row
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
                   courseCode,
-                  style: TextStyle(
+                  style: const TextStyle(
+                    fontFamily: 'Arimo',
                     fontSize: 12,
-                    color: Colors.grey.shade600,
-                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF9CB3CC),
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 4,
+                    horizontal: 9,
+                    vertical: 3,
                   ),
                   decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.1),
+                    color: statusBgColor,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
                     status,
                     style: TextStyle(
-                      fontSize: 12,
+                      fontFamily: 'Arimo',
+                      fontSize: 11,
                       color: statusColor,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -154,112 +201,132 @@ class GroupPage extends StatelessWidget {
             ),
             const SizedBox(height: 8),
 
-            // Group Name
-            Text(
-              groupName,
-              style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE8EAF0),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                groupName,
+                style: const TextStyle(
+                  fontFamily: 'Arimo',
+                  fontSize: 13,
+                  color: Color(0xFF4A5565),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 6),
 
-            // Assignment Title
             Text(
               assignmentTitle,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                fontFamily: 'Arimo',
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF101828),
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            Row(
+              children: [
+                const Icon(
+                  Icons.calendar_today_outlined,
+                  size: 13,
+                  color: Color(0xFF99A1AF),
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  deadline,
+                  style: const TextStyle(
+                    fontFamily: 'Arimo',
+                    fontSize: 12,
+                    color: Color(0xFF99A1AF),
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
 
-            // Deadline and Member Avatars Row
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // Deadline
-                Row(
-                  children: [
-                    Icon(
-                      Icons.calendar_today_outlined,
-                      size: 14,
-                      color: Colors.grey.shade600,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      deadline,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                  ],
-                ),
-
-                // Member Initial Avatars
-                Row(
-                  children: [
-                    ...memberInitials.map(
-                      (initial) => Container(
-                        width: 28,
-                        height: 28,
-                        margin: const EdgeInsets.only(left: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE8EAF6),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
-                        ),
-                        child: Center(
-                          child: Text(
-                            initial,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: Color(0xFF5C6BC0),
+                SizedBox(
+                  height: 34,
+                  width: memberInitials.length * 22.0 + 12,
+                  child: Stack(
+                    children: [
+                      for (int i = 0; i < memberInitials.length; i++)
+                        Positioned(
+                          left: i * 22.0,
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFFFFF),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: const Color(0xFFFFFFFF),
+                                width: 2,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.1),
+                                  blurRadius: 3,
+                                  offset: const Offset(0, 1),
+                                ),
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.1),
+                                  blurRadius: 2,
+                                  offset: const Offset(0, 1),
+                                ),
+                              ],
+                            ),
+                            child: Center(
+                              child: Text(
+                                memberInitials[i],
+                                style: const TextStyle(
+                                  fontFamily: 'Arimo',
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFFAFBCDD),
+                                ),
+                              ),
                             ),
                           ),
                         ),
+                    ],
+                  ),
+                ),
+
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFAFBCDD),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFAFBCDD).withOpacity(0.5),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Icon(
-                      Icons.arrow_forward_ios,
-                      size: 16,
-                      color: Colors.grey.shade400,
-                    ),
-                  ],
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.arrow_forward_ios,
+                    size: 14,
+                    color: Color(0xFFFFFFFF),
+                  ),
                 ),
               ],
             ),
           ],
         ),
       ),
-    );
-  }
-
-  /// Bottom Navigation Bar Widget
-  Widget _buildBottomNavBar(
-    BuildContext context, {
-    required int selectedIndex,
-  }) {
-    return BottomNavigationBar(
-      currentIndex: selectedIndex,
-      type: BottomNavigationBarType.fixed,
-      selectedItemColor: const Color(0xFF5C6BC0),
-      unselectedItemColor: Colors.grey,
-      items: const [
-        BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: 'Home'),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.calendar_today_outlined),
-          label: 'Planner',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.people_outline),
-          label: 'Group',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.settings_outlined),
-          label: 'Settings',
-        ),
-      ],
-      onTap: (index) {
-        // Handle navigation
-      },
     );
   }
 }

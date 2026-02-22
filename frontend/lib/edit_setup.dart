@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
+import 'dart:html' as html;
 
-/// Page 6.5 / Edit Setup
-/// Allows editing of existing group assignment setup
-/// This is essentially the same as Page 6.2 but with pre-filled data
+/// Page 6.5 - Edit Setup
 class EditSetupPage extends StatefulWidget {
   const EditSetupPage({Key? key}) : super(key: key);
 
@@ -24,8 +23,9 @@ class _EditSetupPageState extends State<EditSetupPage> {
   );
 
   DateTime? _selectedDeadline = DateTime(2023, 11, 15, 23, 59);
+  String? _uploadedFileName;
+  bool _isAddMemberHovered = false;
 
-  // Pre-filled member data
   List<Map<String, dynamic>> _members = [
     {
       'name': TextEditingController(text: 'Alex'),
@@ -50,132 +50,292 @@ class _EditSetupPageState extends State<EditSetupPage> {
     'Testing',
   ];
 
+  Future<void> _pickFile() async {
+    final uploadInput = html.FileUploadInputElement();
+    uploadInput.accept = '.pdf,.doc,.docx';
+    uploadInput.click();
+    uploadInput.onChange.listen((event) {
+      final files = uploadInput.files;
+      if (files != null && files.isNotEmpty) {
+        setState(() {
+          _uploadedFileName = files.first.name;
+        });
+      }
+    });
+  }
+
+  BoxDecoration get _inputBoxDecoration => BoxDecoration(
+    color: const Color(0xFFFFFFFF),
+    borderRadius: BorderRadius.circular(8),
+    boxShadow: [
+      BoxShadow(
+        color: Colors.black.withOpacity(0.1),
+        blurRadius: 3,
+        offset: const Offset(0, 1),
+      ),
+      BoxShadow(
+        color: Colors.black.withOpacity(0.1),
+        blurRadius: 2,
+        offset: const Offset(0, 1),
+      ),
+    ],
+  );
+
+  InputDecoration _fieldDecoration(String hint) => InputDecoration(
+    hintText: hint,
+    hintStyle: const TextStyle(
+      fontFamily: 'Arimo',
+      color: Color(0xFF99A1AF),
+      fontSize: 14,
+    ),
+    filled: true,
+    fillColor: const Color(0xFFFFFFFF),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: BorderSide.none,
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: BorderSide.none,
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: const BorderSide(color: Color(0xFFAFBCDD), width: 1.5),
+    ),
+    contentPadding: const EdgeInsets.all(12),
+  );
+
+  BoxDecoration get _cardDecoration => BoxDecoration(
+    color: const Color(0xFFFFFFFF),
+    borderRadius: BorderRadius.circular(14),
+    boxShadow: [
+      BoxShadow(
+        color: Colors.black.withOpacity(0.1),
+        blurRadius: 3,
+        offset: const Offset(0, 1),
+      ),
+      BoxShadow(
+        color: Colors.black.withOpacity(0.1),
+        blurRadius: 2,
+        offset: const Offset(0, 1),
+      ),
+    ],
+  );
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFFFF8F0),
       appBar: AppBar(
+        backgroundColor: const Color(0xFFFFFFFF),
+        elevation: 1,
+        shadowColor: Colors.black.withOpacity(0.1),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: const Icon(
+            Icons.arrow_back,
+            color: Color(0xFF2D2D3A),
+            size: 24,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Edit Setup'),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0,
+        centerTitle: true,
+        title: const Text(
+          'Edit Setup',
+          style: TextStyle(
+            fontFamily: 'Arimo',
+            fontSize: 16,
+            height: 1.5,
+            color: Color(0xFF101828),
+            fontWeight: FontWeight.w400,
+          ),
+        ),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // SECTION A: Group Members
           _buildGroupMembersSection(),
-          const SizedBox(height: 24),
-
-          // SECTION B: Assignment Details
+          const SizedBox(height: 16),
           _buildAssignmentDetailsSection(),
-          const SizedBox(height: 24),
-
-          // SECTION C: Assignment Questions/Brief
+          const SizedBox(height: 16),
           _buildAssignmentBriefSection(),
           const SizedBox(height: 24),
-
-          // SECTION D: Generate Tasks Button
           _buildGenerateButton(),
           const SizedBox(height: 32),
+        ],
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
+        backgroundColor: const Color(0xFFFFFFFF),
+        selectedItemColor: const Color(0xFFAFBCDD),
+        unselectedItemColor: const Color(0xFF99A1AF),
+        selectedFontSize: 12,
+        unselectedFontSize: 12,
+        iconSize: 24,
+        currentIndex: 2,
+        onTap: (index) {
+          if (index != 2) Navigator.popUntil(context, (route) => route.isFirst);
+        },
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home_outlined, size: 24),
+            label: 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.calendar_today_outlined, size: 24),
+            label: 'Planner',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.people_outline, size: 24),
+            label: 'Group',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.settings_outlined, size: 24),
+            label: 'Settings',
+          ),
         ],
       ),
     );
   }
 
-  /// SECTION A: Group Members
   Widget _buildGroupMembersSection() {
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
+      decoration: _cardDecoration,
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
             'Group Members',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
-
-          // Group Name Input
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'GROUP NAME',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey.shade600,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _groupNameController,
-                decoration: InputDecoration(
-                  hintText: 'Enter group name',
-                  hintStyle: TextStyle(color: Colors.grey.shade400),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  contentPadding: const EdgeInsets.all(12),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // Member List
-          ..._members.asMap().entries.map((entry) {
-            int index = entry.key;
-            Map<String, dynamic> member = entry.value;
-            return _buildMemberCard(index, member);
-          }),
-
-          // Add Member Button
-          const SizedBox(height: 12),
-          OutlinedButton(
-            onPressed: () {
-              setState(() {
-                _members.add({
-                  'name': TextEditingController(),
-                  'strengths': <String>[],
-                });
-              });
-            },
-            style: OutlinedButton.styleFrom(
-              side: BorderSide(
-                color: Colors.grey.shade300,
-                style: BorderStyle.solid,
-                width: 1.5,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 12),
+            style: TextStyle(
+              fontFamily: 'Arimo',
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF101828),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.add, size: 18, color: Colors.grey.shade700),
-                const SizedBox(width: 8),
-                Text(
-                  'Add member',
-                  style: TextStyle(color: Colors.grey.shade700, fontSize: 14),
+          ),
+          const SizedBox(height: 10),
+          const Divider(color: Color(0xFFE7E6EB), thickness: 1, height: 1),
+          const SizedBox(height: 16),
+
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF5F5F5),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFE7E6EB), width: 1),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 3,
+                  offset: const Offset(0, 1),
+                ),
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 2,
+                  offset: const Offset(0, 1),
                 ),
               ],
+            ),
+            child: Row(
+              children: [
+                const Text(
+                  'GROUP NAME',
+                  style: TextStyle(
+                    fontFamily: 'Arimo',
+                    fontSize: 12,
+                    color: Color(0xFF909EC3),
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Container(
+                    decoration: _inputBoxDecoration,
+                    child: TextField(
+                      controller: _groupNameController,
+                      style: const TextStyle(
+                        fontFamily: 'Arimo',
+                        fontSize: 14,
+                        color: Color(0xFF2D2D3A),
+                      ),
+                      decoration: _fieldDecoration('Enter group name'),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          ..._members.asMap().entries.map(
+            (entry) => _buildMemberCard(entry.key, entry.value),
+          ),
+
+          const SizedBox(height: 4),
+
+          // ── CHANGED: dashed border stays, color changes on hover ──
+          MouseRegion(
+            onEnter: (_) => setState(() => _isAddMemberHovered = true),
+            onExit: (_) => setState(() => _isAddMemberHovered = false),
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: () {
+                setState(() {
+                  _members.add({
+                    'name': TextEditingController(),
+                    'strengths': <String>[],
+                  });
+                });
+              },
+              child: CustomPaint(
+                painter: _DashedBorderPainter(
+                  color: _isAddMemberHovered
+                      ? const Color(0xFFAFBCDD)
+                      : const Color(0xFF99A1AF),
+                  borderRadius: 10,
+                  dashWidth: 6,
+                  dashSpace: 4,
+                  strokeWidth: _isAddMemberHovered ? 1.8 : 1.5,
+                ),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: _isAddMemberHovered
+                        ? const Color(0xFFEFF3FB)
+                        : const Color(0xFFFFFFFF),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Center(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.add,
+                          size: 16,
+                          color: _isAddMemberHovered
+                              ? const Color(0xFFAFBCDD)
+                              : const Color(0xFF99A1AF),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Add member',
+                          style: TextStyle(
+                            fontFamily: 'Arimo',
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: _isAddMemberHovered
+                                ? const Color(0xFFAFBCDD)
+                                : const Color(0xFF99A1AF),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
         ],
@@ -183,108 +343,134 @@ class _EditSetupPageState extends State<EditSetupPage> {
     );
   }
 
-  /// Individual Member Card
   Widget _buildMemberCard(int index, Map<String, dynamic> member) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(8),
+        color: const Color(0xFFF5F5F5),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE7E6EB), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 3,
+            offset: const Offset(0, 1),
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 2,
+            offset: const Offset(0, 1),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Member Header with Delete Button
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
                 'MEMBER ${index + 1}',
-                style: TextStyle(
+                style: const TextStyle(
+                  fontFamily: 'Arimo',
                   fontSize: 12,
-                  color: Colors.grey.shade600,
-                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF909EC3),
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
                 ),
               ),
-              IconButton(
-                icon: Icon(Icons.close, color: Colors.grey.shade400, size: 20),
-                onPressed: () {
-                  setState(() {
-                    _members.removeAt(index);
-                  });
-                },
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
+              GestureDetector(
+                onTap: () => setState(() => _members.removeAt(index)),
+                child: const Icon(
+                  Icons.close,
+                  color: Color(0xFF909EC3),
+                  size: 20,
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
-
-          // Name Input
-          TextField(
-            controller: member['name'],
-            decoration: InputDecoration(
-              hintText: 'Enter name',
-              hintStyle: TextStyle(color: Colors.grey.shade400),
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.grey.shade300),
+          const SizedBox(height: 12),
+          Container(
+            decoration: _inputBoxDecoration,
+            child: TextField(
+              controller: member['name'],
+              style: const TextStyle(
+                fontFamily: 'Arimo',
+                fontSize: 14,
+                color: Color(0xFF2D2D3A),
               ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.grey.shade300),
-              ),
-              contentPadding: const EdgeInsets.all(12),
+              decoration: _fieldDecoration('Enter name'),
             ),
           ),
           const SizedBox(height: 12),
-
-          // Strengths Label
-          Text(
+          const Text(
             'Strengths',
             style: TextStyle(
+              fontFamily: 'Arimo',
               fontSize: 13,
-              color: Colors.grey.shade700,
-              fontWeight: FontWeight.w500,
+              color: Color(0xFF6A7282),
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 8),
-
-          // Strength Chips
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: _availableStrengths.map((strength) {
-              bool isSelected = (member['strengths'] as List<String>).contains(
-                strength,
-              );
-              return FilterChip(
-                label: Text(strength),
-                selected: isSelected,
-                onSelected: (selected) {
+              final bool isSelected = (member['strengths'] as List<String>)
+                  .contains(strength);
+              return GestureDetector(
+                onTap: () {
                   setState(() {
-                    if (selected) {
-                      (member['strengths'] as List<String>).add(strength);
-                    } else {
+                    if (isSelected) {
                       (member['strengths'] as List<String>).remove(strength);
+                    } else {
+                      (member['strengths'] as List<String>).add(strength);
                     }
                   });
                 },
-                backgroundColor: Colors.white,
-                selectedColor: const Color(0xFF9FA8DA),
-                labelStyle: TextStyle(
-                  color: isSelected ? Colors.white : Colors.grey.shade700,
-                  fontSize: 13,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? const Color(0xFFAFBCDD)
+                        : const Color(0xFFFFFFFF),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isSelected
+                          ? const Color(0xFFAFBCDD)
+                          : const Color(0xFFE7E6EB),
+                      width: 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 3,
+                        offset: const Offset(0, 1),
+                      ),
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 2,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                  child: Text(
+                    strength,
+                    style: TextStyle(
+                      fontFamily: 'Arimo',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: isSelected
+                          ? const Color(0xFFFFFFFF)
+                          : const Color(0xFF6A7282),
+                    ),
+                  ),
                 ),
-                side: BorderSide(
-                  color: isSelected
-                      ? const Color(0xFF9FA8DA)
-                      : Colors.grey.shade300,
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               );
             }).toList(),
           ),
@@ -293,218 +479,302 @@ class _EditSetupPageState extends State<EditSetupPage> {
     );
   }
 
-  /// SECTION B: Assignment Details
   Widget _buildAssignmentDetailsSection() {
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
+      decoration: _cardDecoration,
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
             'Assignment Details',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontFamily: 'Arimo',
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF101828),
+            ),
           ),
+          const SizedBox(height: 10),
+          const Divider(color: Color(0xFFE7E6EB), thickness: 1, height: 1),
           const SizedBox(height: 16),
-
-          // Course Name
-          _buildTextField(
+          _buildLabeledField(
             label: 'Course Name',
             controller: _courseNameController,
             hint: 'e.g. CS101',
           ),
           const SizedBox(height: 16),
-
-          // Assignment Title
-          _buildTextField(
+          _buildLabeledField(
             label: 'Assignment Title',
             controller: _assignmentTitleController,
             hint: 'e.g. Final Group Project',
           ),
           const SizedBox(height: 16),
-
-          // Deadline
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Deadline',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-              ),
-              const SizedBox(height: 8),
-              InkWell(
-                onTap: () async {
-                  final DateTime? pickedDate = await showDatePicker(
-                    context: context,
-                    initialDate: _selectedDeadline ?? DateTime.now(),
-                    firstDate: DateTime.now(),
-                    lastDate: DateTime.now().add(const Duration(days: 365)),
-                  );
-                  if (pickedDate != null) {
-                    final TimeOfDay? pickedTime = await showTimePicker(
-                      context: context,
-                      initialTime: TimeOfDay.fromDateTime(
-                        _selectedDeadline ?? DateTime.now(),
-                      ),
+          const Text(
+            'Deadline',
+            style: TextStyle(
+              fontFamily: 'Arimo',
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF364153),
+            ),
+          ),
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: () async {
+              final DateTime? pickedDate = await showDatePicker(
+                context: context,
+                initialDate: _selectedDeadline ?? DateTime.now(),
+                firstDate: DateTime.now(),
+                lastDate: DateTime.now().add(const Duration(days: 365)),
+              );
+              if (pickedDate != null) {
+                final TimeOfDay? pickedTime = await showTimePicker(
+                  context: context,
+                  initialTime: TimeOfDay.fromDateTime(
+                    _selectedDeadline ?? DateTime.now(),
+                  ),
+                  builder: (context, child) => MediaQuery(
+                    data: MediaQuery.of(
+                      context,
+                    ).copyWith(alwaysUse24HourFormat: false),
+                    child: child!,
+                  ),
+                );
+                if (pickedTime != null) {
+                  setState(() {
+                    _selectedDeadline = DateTime(
+                      pickedDate.year,
+                      pickedDate.month,
+                      pickedDate.day,
+                      pickedTime.hour,
+                      pickedTime.minute,
                     );
-                    if (pickedTime != null) {
-                      setState(() {
-                        _selectedDeadline = DateTime(
-                          pickedDate.year,
-                          pickedDate.month,
-                          pickedDate.day,
-                          pickedTime.hour,
-                          pickedTime.minute,
-                        );
-                      });
-                    }
-                  }
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.shade300),
-                    borderRadius: BorderRadius.circular(8),
+                  });
+                }
+              }
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFFFFF),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFE7E6EB), width: 1),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 3,
+                    offset: const Offset(0, 1),
                   ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          _selectedDeadline != null
-                              ? '${_selectedDeadline!.day}/${_selectedDeadline!.month}/${_selectedDeadline!.year} ${_selectedDeadline!.hour}:${_selectedDeadline!.minute.toString().padLeft(2, '0')} PM'
-                              : 'dd/mm/yyyy --:--',
-                          style: TextStyle(
-                            color: _selectedDeadline != null
-                                ? Colors.black
-                                : Colors.grey.shade400,
-                          ),
-                        ),
-                      ),
-                      Icon(
-                        Icons.calendar_today,
-                        color: Colors.grey.shade600,
-                        size: 18,
-                      ),
-                    ],
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 2,
+                    offset: const Offset(0, 1),
                   ),
-                ),
+                ],
               ),
-            ],
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _selectedDeadline != null
+                          ? _formatDeadline(_selectedDeadline!)
+                          : 'dd/mm/yyyy  --:-- --',
+                      style: TextStyle(
+                        fontFamily: 'Arimo',
+                        fontSize: 14,
+                        color: _selectedDeadline != null
+                            ? const Color(0xFF2D2D3A)
+                            : const Color(0xFF909EC3),
+                      ),
+                    ),
+                  ),
+                  const Icon(
+                    Icons.calendar_today_outlined,
+                    color: Color(0xFF909EC3),
+                    size: 18,
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  /// SECTION C: Assignment Questions/Brief
+  String _formatDeadline(DateTime dt) {
+    final String day = dt.day.toString().padLeft(2, '0');
+    final String month = dt.month.toString().padLeft(2, '0');
+    final String year = dt.year.toString();
+    final int hour12 = dt.hour == 0
+        ? 12
+        : (dt.hour > 12 ? dt.hour - 12 : dt.hour);
+    final String minute = dt.minute.toString().padLeft(2, '0');
+    final String ampm = dt.hour < 12 ? 'AM' : 'PM';
+    return '$day/$month/$year  ${hour12.toString().padLeft(2, '0')}:$minute $ampm';
+  }
+
   Widget _buildAssignmentBriefSection() {
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
+      decoration: _cardDecoration,
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
             'Assignment Questions / Brief',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
-
-          // Text Area
-          TextField(
-            controller: _briefController,
-            maxLines: 6,
-            decoration: InputDecoration(
-              hintText: 'Paste assignment questions or brief here...',
-              hintStyle: TextStyle(color: Colors.grey.shade400),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.grey.shade300),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.grey.shade300),
-              ),
-              contentPadding: const EdgeInsets.all(12),
+            style: TextStyle(
+              fontFamily: 'Arimo',
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF101828),
             ),
           ),
+          const SizedBox(height: 10),
+          const Divider(color: Color(0xFFE7E6EB), thickness: 1, height: 1),
           const SizedBox(height: 16),
-
-          // OR Divider
-          Row(
-            children: [
-              Expanded(child: Divider(color: Colors.grey.shade300)),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Text(
-                  'OR',
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontWeight: FontWeight.w500,
-                  ),
+          Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFFF5F5F5),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFE7E6EB), width: 1),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 3,
+                  offset: const Offset(0, 1),
                 ),
-              ),
-              Expanded(child: Divider(color: Colors.grey.shade300)),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // Upload Button
-          OutlinedButton(
-            onPressed: () {
-              // Handle file upload
-            },
-            style: OutlinedButton.styleFrom(
-              side: BorderSide(
-                color: Colors.grey.shade300,
-                style: BorderStyle.solid,
-                width: 1.5,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 16),
-            ),
-            child: Column(
-              children: [
-                Icon(Icons.upload_file, color: Colors.grey.shade600, size: 28),
-                const SizedBox(height: 8),
-                Text(
-                  'Upload PDF / DOC',
-                  style: TextStyle(color: Colors.grey.shade700, fontSize: 14),
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 2,
+                  offset: const Offset(0, 1),
                 ),
               ],
             ),
+            child: TextField(
+              controller: _briefController,
+              maxLines: 6,
+              style: const TextStyle(
+                fontFamily: 'Arimo',
+                fontSize: 14,
+                color: Color(0xFF2D2D3A),
+              ),
+              decoration: InputDecoration(
+                hintText: 'Paste assignment questions or brief here...',
+                hintStyle: const TextStyle(
+                  fontFamily: 'Arimo',
+                  color: Color(0xFF99A1AF),
+                  fontSize: 14,
+                ),
+                filled: true,
+                fillColor: const Color(0xFFF5F5F5),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(
+                    color: Color(0xFFAFBCDD),
+                    width: 1.5,
+                  ),
+                ),
+                contentPadding: const EdgeInsets.all(12),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: const [
+              Expanded(child: Divider(color: Color(0xFFE7E6EB), thickness: 1)),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  'OR',
+                  style: TextStyle(
+                    fontFamily: 'Arimo',
+                    color: Color(0xFF99A1AF),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              Expanded(child: Divider(color: Color(0xFFE7E6EB), thickness: 1)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          GestureDetector(
+            onTap: _pickFile,
+            child: CustomPaint(
+              painter: _DashedBorderPainter(
+                color: const Color(0xFFAFBCDD),
+                borderRadius: 8,
+              ),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 28),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5F5F5),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      _uploadedFileName != null
+                          ? Icons.check_circle_outline
+                          : Icons.upload_file_outlined,
+                      color: _uploadedFileName != null
+                          ? const Color(0xFF008236)
+                          : const Color(0xFF909EC3),
+                      size: 32,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _uploadedFileName ?? 'Upload PDF / DOC',
+                      style: TextStyle(
+                        fontFamily: 'Arimo',
+                        color: _uploadedFileName != null
+                            ? const Color(0xFF008236)
+                            : const Color(0xFF909EC3),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
           const SizedBox(height: 12),
-
-          // Helper Text
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFFE3F2FD),
+              color: const Color(0xFFEFF6FF),
               borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFBEDBFF), width: 1),
             ),
             child: Row(
-              children: [
+              children: const [
                 Icon(
                   Icons.lightbulb_outline,
-                  color: Colors.blue.shade700,
-                  size: 18,
+                  color: Color(0xFF5D7AA3),
+                  size: 16,
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     'AI will analyze this to identify required tasks.',
-                    style: TextStyle(fontSize: 13, color: Colors.blue.shade700),
+                    style: TextStyle(
+                      fontFamily: 'Arimo',
+                      fontSize: 13,
+                      color: Color(0xFF5D7AA3),
+                    ),
                   ),
                 ),
               ],
@@ -515,30 +785,47 @@ class _EditSetupPageState extends State<EditSetupPage> {
     );
   }
 
-  /// SECTION D: Generate Tasks Button
   Widget _buildGenerateButton() {
-    return SizedBox(
-      width: double.infinity,
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 3,
+            offset: const Offset(0, 1),
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 2,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
       child: ElevatedButton(
-        onPressed: () {
-          // Navigate to Page 6.3 - AI Task Breakdown
-          Navigator.pushNamed(context, '/task-breakdown');
-        },
+        onPressed: () => Navigator.pushNamed(context, '/task-distribution'),
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF9FA8DA),
+          backgroundColor: const Color(0xFF9C9EC3),
+          foregroundColor: const Color(0xFFFFFFFF),
+          elevation: 0,
           padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
         ),
         child: const Text(
           'Generate Tasks with AI',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+          style: TextStyle(
+            fontFamily: 'Arimo',
+            fontSize: 16,
+            fontWeight: FontWeight.w400,
+          ),
         ),
       ),
     );
   }
 
-  /// Helper: Build Text Field
-  Widget _buildTextField({
+  Widget _buildLabeledField({
     required String label,
     required TextEditingController controller,
     required String hint,
@@ -548,23 +835,24 @@ class _EditSetupPageState extends State<EditSetupPage> {
       children: [
         Text(
           label,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          style: const TextStyle(
+            fontFamily: 'Arimo',
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF364153),
+          ),
         ),
         const SizedBox(height: 8),
-        TextField(
-          controller: controller,
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: TextStyle(color: Colors.grey.shade400),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Colors.grey.shade300),
+        Container(
+          decoration: _inputBoxDecoration,
+          child: TextField(
+            controller: controller,
+            style: const TextStyle(
+              fontFamily: 'Arimo',
+              fontSize: 14,
+              color: Color(0xFF2D2D3A),
             ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Colors.grey.shade300),
-            ),
-            contentPadding: const EdgeInsets.all(12),
+            decoration: _fieldDecoration(hint),
           ),
         ),
       ],
@@ -582,4 +870,51 @@ class _EditSetupPageState extends State<EditSetupPage> {
     }
     super.dispose();
   }
+}
+
+class _DashedBorderPainter extends CustomPainter {
+  final Color color;
+  final double borderRadius;
+  final double dashWidth;
+  final double dashSpace;
+  final double strokeWidth;
+
+  const _DashedBorderPainter({
+    required this.color,
+    this.borderRadius = 8,
+    this.dashWidth = 6,
+    this.dashSpace = 4,
+    this.strokeWidth = 1.5,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = strokeWidth
+      ..style = PaintingStyle.stroke;
+    final RRect rrect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(0, 0, size.width, size.height),
+      Radius.circular(borderRadius),
+    );
+    final Path path = Path()..addRRect(rrect);
+    for (final metric in path.computeMetrics()) {
+      double distance = 0.0;
+      bool draw = true;
+      while (distance < metric.length) {
+        final double len = draw ? dashWidth : dashSpace;
+        if (draw)
+          canvas.drawPath(metric.extractPath(distance, distance + len), paint);
+        distance += len;
+        draw = !draw;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashedBorderPainter oldDelegate) =>
+      oldDelegate.color != color ||
+      oldDelegate.dashWidth != dashWidth ||
+      oldDelegate.dashSpace != dashSpace ||
+      oldDelegate.strokeWidth != strokeWidth;
 }
