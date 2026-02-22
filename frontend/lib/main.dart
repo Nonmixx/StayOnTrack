@@ -5,6 +5,11 @@ import 'planner_page.dart';
 import 'monthly_planner_page.dart';
 import 'weekly_planner_page.dart';
 import 'weekly_checkin_page.dart';
+import 'group_overview.dart';
+import 'assignment_setup.dart';
+import 'ai_task_breakdown.dart';
+import 'ai_task_distribution.dart';
+import 'edit_setup.dart';
 import 'settings_page.dart';
 import 'semester_setup_page.dart';
 import 'course_and_exam_input.dart';
@@ -34,11 +39,16 @@ class MyApp extends StatelessWidget {
       home: const SemesterSetupPage(),
       routes: {
         AppRoutes.semesterSetup: (context) => const SemesterSetupPage(),
-        AppRoutes.courseAndExamInput: (context) => const CourseAndExamInputPage(),
-        AppRoutes.assignmentAndProject: (context) => const AssignmentAndProjectPage(),
-        AppRoutes.focusAndEnergyProfile: (context) => const FocusAndEnergyProfilePage(),
+        AppRoutes.courseAndExamInput: (context) =>
+            const CourseAndExamInputPage(),
+        AppRoutes.assignmentAndProject: (context) =>
+            const AssignmentAndProjectPage(),
+        AppRoutes.focusAndEnergyProfile: (context) =>
+            const FocusAndEnergyProfilePage(),
         AppRoutes.addDeadline: (context) {
-          final a = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+          final a =
+              ModalRoute.of(context)?.settings.arguments
+                  as Map<String, dynamic>?;
           if (a == null) return const AddDeadlinePage();
           return AddDeadlinePage(
             editIndex: a['editIndex'] as int?,
@@ -51,6 +61,12 @@ class MyApp extends StatelessWidget {
         },
         AppRoutes.editDeadlines: (context) => const EditDeadlinesPage(),
         AppRoutes.home: (context) => const MainNavigation(),
+
+        '/group-overview': (context) => const GroupPage(),
+        '/group-assignment-setup': (context) => const AssignmentSetupPage(),
+        '/task-breakdown': (context) => const TaskBreakdownPage(),
+        '/task-distribution': (context) => const TaskDistributionPage(),
+        '/edit-setup': (context) => const EditSetupPage(),
       },
     );
   }
@@ -76,9 +92,11 @@ class _MainNavigationState extends State<MainNavigation> {
   void initState() {
     super.initState();
     AppNav.navigateToHome = () => setState(() => _selectedIndex = _homeIndex);
-    AppNav.navigateToPlanner = () => setState(() => _selectedIndex = _plannerIndex);
+    AppNav.navigateToPlanner = () =>
+        setState(() => _selectedIndex = _plannerIndex);
     AppNav.navigateToGroup = () => setState(() => _selectedIndex = _groupIndex);
-    AppNav.navigateToSettings = () => setState(() => _selectedIndex = _settingsIndex);
+    AppNav.navigateToSettings = () =>
+        setState(() => _selectedIndex = _settingsIndex);
   }
 
   final List<Widget> _pages = [
@@ -129,9 +147,8 @@ class _MainNavigationState extends State<MainNavigation> {
   }
 }
 
-// Placeholder pages
-class GroupPage extends StatelessWidget {
-  const GroupPage({super.key});
+class SettingsPage extends StatelessWidget {
+  const SettingsPage({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -142,7 +159,7 @@ class GroupPage extends StatelessWidget {
         elevation: 0,
         centerTitle: true,
         title: const Text(
-          'Group',
+          'Settings',
           style: TextStyle(
             color: Colors.black87,
             fontSize: 18,
@@ -150,9 +167,7 @@ class GroupPage extends StatelessWidget {
           ),
         ),
       ),
-      body: const Center(
-        child: Text('Group Page'),
-      ),
+      body: const Center(child: Text('Settings Page')),
     );
   }
 }
