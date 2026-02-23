@@ -315,15 +315,17 @@ public class FirestoreService {
 
     public List<Semester> getSemestersByUserId(String userId) throws ExecutionException, InterruptedException {
         Firestore db = getFirestore();
-        Query query = db.collection(SEMESTERS_COLLECTION)
-                .whereEqualTo("userId", userId)
-                .orderBy("createdAt", Query.Direction.DESCENDING);
+        Query query = db.collection(SEMESTERS_COLLECTION).whereEqualTo("userId", userId);
         QuerySnapshot snapshot = query.get().get();
         List<Semester> list = new ArrayList<>();
         for (DocumentSnapshot doc : snapshot.getDocuments()) {
             Semester s = mapToSemester(doc);
             if (s != null) list.add(s);
         }
+        list.sort((a, b) -> {
+            if (a.getCreatedAt() == null || b.getCreatedAt() == null) return 0;
+            return b.getCreatedAt().compareTo(a.getCreatedAt());
+        });
         return list;
     }
 
@@ -440,15 +442,17 @@ public class FirestoreService {
 
     public List<FocusProfile> getFocusProfilesByUserId(String userId) throws ExecutionException, InterruptedException {
         Firestore db = getFirestore();
-        Query query = db.collection(FOCUS_PROFILES_COLLECTION)
-                .whereEqualTo("userId", userId)
-                .orderBy("createdAt", Query.Direction.DESCENDING);
+        Query query = db.collection(FOCUS_PROFILES_COLLECTION).whereEqualTo("userId", userId);
         QuerySnapshot snapshot = query.get().get();
         List<FocusProfile> list = new ArrayList<>();
         for (DocumentSnapshot doc : snapshot.getDocuments()) {
             FocusProfile f = mapToFocusProfile(doc);
             if (f != null) list.add(f);
         }
+        list.sort((a, b) -> {
+            if (a.getCreatedAt() == null || b.getCreatedAt() == null) return 0;
+            return b.getCreatedAt().compareTo(a.getCreatedAt());
+        });
         return list;
     }
 
