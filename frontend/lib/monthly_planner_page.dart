@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'weekly_planner_page.dart';
 import 'utils/calendar_utils.dart';
 import 'api/planner_api.dart';
+import 'app_nav.dart';
 
 class MonthlyPlannerPage extends StatefulWidget {
   final DateTime month;
@@ -49,6 +50,28 @@ class _MonthlyPlannerPageState extends State<MonthlyPlannerPage> {
           monthLabel,
           style: const TextStyle(color: Colors.black87, fontSize: 18, fontWeight: FontWeight.w600),
         ),
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
+        backgroundColor: const Color(0xFFFFFFFF),
+        selectedItemColor: const Color(0xFFAFBCDD),
+        unselectedItemColor: const Color(0xFF99A1AF),
+        selectedFontSize: 12,
+        unselectedFontSize: 12,
+        iconSize: 24,
+        currentIndex: 1,
+        onTap: (index) {
+          if (index == 0) AppNav.navigateToHome?.call();
+          else if (index == 1) Navigator.pop(context);
+          else if (index == 2) AppNav.navigateToGroup?.call();
+          else if (index == 3) AppNav.navigateToSettings?.call();
+        },
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home_outlined, size: 24), label: 'Home'),
+          BottomNavigationBarItem(icon: Icon(Icons.calendar_today_outlined, size: 24), label: 'Planner'),
+          BottomNavigationBarItem(icon: Icon(Icons.people_outline, size: 24), label: 'Group'),
+          BottomNavigationBarItem(icon: Icon(Icons.settings_outlined, size: 24), label: 'Settings'),
+        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFFAFBCDD)))
