@@ -3,7 +3,6 @@ package com.stayontrack.service;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
@@ -58,7 +57,8 @@ public class PlannerEngineService {
             if (planEnd.isBefore(currentWeekStart.plusWeeks(4))) {
                 planEnd = currentWeekStart.plusWeeks(12);
             }
-            if (planStart.isAfter(currentWeekStart)) {
+            // Never plan for weeks that have already passed
+            if (planStart.isBefore(currentWeekStart)) {
                 planStart = currentWeekStart;
             }
         } else {
@@ -204,14 +204,20 @@ public class PlannerEngineService {
         }
 
         if (geminiService.isAvailable()) {
+            // Include deadlines in a reasonable preparation window: from 6 weeks before
+            // deadline until the deadline week. Avoids tasks too far ahead or past.
+            LocalDate currentWeekStart = getWeekStart(LocalDate.now());
             List<Deadline> relevantDeadlines = deadlines.stream()
-                    .filter(d -> d.getDueDate() != null && !d.getDueDate().isBefore(weekStart) && !d.getDueDate().isAfter(weekEnd.plusWeeks(2)))
+                    .filter(d -> {
+                        if (d.getDueDate() == null) return false;
+                        LocalDate deadlineWeekStart = getWeekStart(d.getDueDate());
+                        return !weekStart.isAfter(deadlineWeekStart)  // not past deadline week
+                                && !weekStart.isBefore(deadlineWeekStart.minusWeeks(6))  // not too early
+                                && !weekStart.isBefore(currentWeekStart);  // not in the past
+                    })
                     .toList();
-            if (relevantDeadlines.isEmpty() && !deadlines.isEmpty()) {
-                relevantDeadlines = deadlines.stream().filter(d -> d.getDueDate() != null).limit(10).toList();
-            }
             List<String> suggestions = geminiService.generateTaskSuggestionsForWeek(
-                    relevantDeadlines.isEmpty() ? deadlines : relevantDeadlines, availableHours, feedback, weekStart, peakFocus, lowEnergy, restDays, typicalDuration);
+                    relevantDeadlines, availableHours, feedback, weekStart, peakFocus, lowEnergy, restDays, typicalDuration);
             for (String s : suggestions) {
                 String[] parts = s.split("\\|");
                 if (parts.length >= 4) {
@@ -236,10 +242,15 @@ public class PlannerEngineService {
         }
 
         if (tasks.isEmpty() && !deadlines.isEmpty()) {
+            LocalDate currentWeekStart = getWeekStart(LocalDate.now());
             int hoursPerDay = Math.max(1, availableHours / 7);
             int dayIndex = 0;
             for (Deadline d : deadlines) {
-                if (d.getDueDate() == null || d.getDueDate().isAfter(weekEnd)) continue;
+                if (d.getDueDate() == null) continue;
+                LocalDate deadlineWeekStart = getWeekStart(d.getDueDate());
+                if (weekStart.isAfter(deadlineWeekStart)
+                        || weekStart.isBefore(deadlineWeekStart.minusWeeks(6))
+                        || weekStart.isBefore(currentWeekStart)) continue;
                 if (restDays != null && dayIndex < 7) {
                     String dayName = DAY_NAMES[dayIndex % 7];
                     if (restDays.contains(dayName)) { dayIndex++; continue; }
@@ -260,10 +271,7 @@ public class PlannerEngineService {
             }
         }
 
-        if (tasks.isEmpty()) {
-            tasks.addAll(createDefaultTasks(week, weekStart, availableHours, restDays));
-        }
-
+        // Do NOT add generic tasks - only tasks from user-added deadlines
         return tasks;
     }
 
@@ -275,23 +283,4 @@ public class PlannerEngineService {
         return "Work on " + d.getTitle();
     }
 
-    private List<PlannerTask> createDefaultTasks(PlannerWeek week, LocalDate weekStart, int availableHours, List<String> restDays) {
-        List<PlannerTask> tasks = new ArrayList<>();
-        String[] defaultTitles = {"Review lecture notes", "Practice problems", "Read textbook", "Assignment work"};
-        String[] courses = {"General", "Study"};
-        int hoursPerDay = Math.max(1, availableHours / 7);
-        String duration = hoursPerDay + " hour" + (hoursPerDay > 1 ? "s" : "");
-
-        for (int i = 0; i < 7; i++) {
-            LocalDate date = weekStart.plusDays(i);
-            if (date.getDayOfWeek() == DayOfWeek.SATURDAY || date.getDayOfWeek() == DayOfWeek.SUNDAY) continue;
-            if (restDays != null && restDays.contains(DAY_NAMES[i])) continue;
-
-            LocalDateTime scheduledStart = date.atTime(9, 0);
-            PlannerTask task = new PlannerTask(week.getId(), week.getUserId(),
-                    defaultTitles[i % defaultTitles.length], courses[i % 2], duration, date, scheduledStart, "MEDIUM");
-            tasks.add(task);
-        }
-        return tasks;
-    }
 }

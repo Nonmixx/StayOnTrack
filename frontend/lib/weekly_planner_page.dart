@@ -91,8 +91,9 @@ class _WeeklyPlannerPageState extends State<WeeklyPlannerPage> {
         iconSize: 24,
         currentIndex: 1,
         onTap: (index) {
+          Navigator.popUntil(context, (route) => route.isFirst);
           if (index == 0) AppNav.navigateToHome?.call();
-          else if (index == 1) Navigator.pop(context);
+          else if (index == 1) AppNav.navigateToPlanner?.call();
           else if (index == 2) AppNav.navigateToGroup?.call();
           else if (index == 3) AppNav.navigateToSettings?.call();
         },
@@ -199,20 +200,9 @@ class _WeeklyPlannerPageState extends State<WeeklyPlannerPage> {
                             EmptyStateCard(
                               icon: Icons.calendar_today_outlined,
                               title: 'No study plan for this week',
-                              subtitle: _deadlines.isEmpty
-                                  ? 'Set up your plan in Settings first (add deadlines). You may add all your exams, assignments or any other tasks there.'
-                                  : 'Complete the setup flow (Focus & Energy profile) to generate your AI study schedule. Or use Weekly Check-In to update your plan.',
-                              buttonLabel: _deadlines.isEmpty ? 'Go to Settings' : 'Weekly Check-In',
-                              onButtonTap: () {
-                                if (_deadlines.isEmpty) {
-                                  AppNav.goToSettings(context);
-                                } else {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(builder: (context) => const WeeklyCheckInPage()),
-                                  );
-                                }
-                              },
+                              subtitle: 'Go to your settings to setup your planner.',
+                              buttonLabel: 'Go to Settings',
+                              onButtonTap: () => AppNav.goToSettings(context),
                             ),
                         ],
                       ),

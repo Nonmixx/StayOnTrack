@@ -68,11 +68,12 @@ public class GeminiService {
                 prompt.append("User feedback: ").append(feedback).append(". ");
             }
             if (!deadlines.isEmpty()) {
-                prompt.append("Create study tasks for these items (prioritize items due soon): ");
+                prompt.append("Create study tasks ONLY for these items (they are all due on or after the week start - do NOT include any past deadlines): ");
                 for (Deadline d : deadlines) {
                     String due = d.getDueDate() != null ? d.getDueDate().format(DateTimeFormatter.ISO_LOCAL_DATE) : "?";
                     prompt.append(d.getCourse()).append(" ").append(d.getTitle()).append(" (").append(d.getType()).append(") due ").append(due).append("; ");
                 }
+                prompt.append("Prioritize items due soonest. Never schedule tasks for deadlines that have already passed. ");
             }
             prompt.append("Return ONLY a JSON array. Each object: day (1=Mon..7=Sun), startTime (HH:mm 24h), duration (e.g. \"2 hours\"), title, course. ");
             prompt.append("Spread across days. Example: [{\"day\":1,\"startTime\":\"15:00\",\"duration\":\"2 hours\",\"title\":\"Review Chapter 5\",\"course\":\"CS1234\"},{\"day\":1,\"startTime\":\"19:00\",\"duration\":\"1 hour\",\"title\":\"Practice problems\",\"course\":\"CS1234\"}]");

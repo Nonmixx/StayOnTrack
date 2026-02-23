@@ -61,8 +61,9 @@ class _MonthlyPlannerPageState extends State<MonthlyPlannerPage> {
         iconSize: 24,
         currentIndex: 1,
         onTap: (index) {
+          Navigator.popUntil(context, (route) => route.isFirst);
           if (index == 0) AppNav.navigateToHome?.call();
-          else if (index == 1) Navigator.pop(context);
+          else if (index == 1) AppNav.navigateToPlanner?.call();
           else if (index == 2) AppNav.navigateToGroup?.call();
           else if (index == 3) AppNav.navigateToSettings?.call();
         },

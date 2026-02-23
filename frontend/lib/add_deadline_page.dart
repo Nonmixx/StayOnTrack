@@ -112,7 +112,8 @@ class _AddDeadlinePageState extends State<AddDeadlinePage> {
         if (widget.editIndex != null) {
           deadlineStore.updateAt(widget.editIndex!, item);
         }
-        Navigator.of(context).pop();
+        await PlannerApi.generatePlan(availableHours: 20);
+        if (mounted) Navigator.of(context).pop();
       } else if (mounted) {
         _showErrorSnackBar('Failed to update. Please try again.');
       }

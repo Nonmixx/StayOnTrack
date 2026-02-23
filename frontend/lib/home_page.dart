@@ -436,17 +436,9 @@ class _HomePageState extends State<HomePage> {
                         EmptyStateCard(
                           icon: Icons.check_circle_outline,
                           title: 'No study plan for today',
-                          subtitle: _nearestDeadline != null
-                              ? 'Complete the Focus & Energy profile setup to generate your AI study schedule with time slots.'
-                              : 'Set up your plan in Settings first (add deadlines). You may add all your exams, assignments or any other tasks there.',
-                          buttonLabel: _nearestDeadline != null ? 'Complete Setup' : 'Go to Settings',
-                          onButtonTap: () {
-                            if (_nearestDeadline != null) {
-                              Navigator.of(context).pushNamed(AppRoutes.focusAndEnergyProfile);
-                            } else {
-                              AppNav.goToSettings(context);
-                            }
-                          },
+                          subtitle: 'Go to your settings to setup your planner.',
+                          buttonLabel: 'Go to Settings',
+                          onButtonTap: () => AppNav.goToSettings(context),
                         )
                       else
                         ..._tasks.asMap().entries.map((e) {
