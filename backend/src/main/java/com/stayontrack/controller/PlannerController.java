@@ -1,6 +1,7 @@
 package com.stayontrack.controller;
 
 import java.time.LocalDate;
+import java.util.Collections;
 import java.util.List;
 
 import org.springframework.http.ResponseEntity;
@@ -17,7 +18,7 @@ import com.stayontrack.service.PlannerEngineService;
  */
 @RestController
 @RequestMapping("/api/planner")
-@CrossOrigin(origins = "*")
+@CrossOrigin("*")
 public class PlannerController {
 
     private final PlannerEngineService plannerEngine;
@@ -39,7 +40,7 @@ public class PlannerController {
             return ResponseEntity.ok(tasks);
         } catch (Exception e) {
             e.printStackTrace();
-            return ResponseEntity.internalServerError().build();
+            return ResponseEntity.ok(Collections.emptyList());
         }
     }
 

@@ -1,5 +1,6 @@
 package com.stayontrack.controller;
 
+import java.util.Collections;
 import java.util.List;
 
 import org.springframework.http.ResponseEntity;
@@ -10,7 +11,7 @@ import com.stayontrack.service.FirestoreService;
 
 @RestController
 @RequestMapping("/api/deadlines")
-@CrossOrigin(origins = "*")
+@CrossOrigin("*")
 public class DeadlineController {
 
     private final FirestoreService firestoreService;
@@ -39,7 +40,7 @@ public class DeadlineController {
             return ResponseEntity.ok(deadlines);
         } catch (Exception e) {
             e.printStackTrace();
-            return ResponseEntity.internalServerError().build();
+            return ResponseEntity.ok(Collections.emptyList());
         }
     }
 

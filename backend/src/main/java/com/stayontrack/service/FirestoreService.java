@@ -19,9 +19,13 @@ import com.google.cloud.firestore.Firestore;
 import com.google.cloud.firestore.Query;
 import com.google.cloud.firestore.QuerySnapshot;
 import com.google.firebase.cloud.FirestoreClient;
+import com.stayontrack.model.Assignment;
 import com.stayontrack.model.Deadline;
+import com.stayontrack.model.Exam;
+import com.stayontrack.model.FocusProfile;
 import com.stayontrack.model.PlannerTask;
 import com.stayontrack.model.PlannerWeek;
+import com.stayontrack.model.Semester;
 import com.stayontrack.model.Task;
 import com.stayontrack.model.WeeklyCheckIn;
 
@@ -33,6 +37,10 @@ public class FirestoreService {
     private static final String WEEKLY_CHECK_INS_COLLECTION = "weeklyCheckIns";
     private static final String PLANNER_WEEKS_COLLECTION = "plannerWeeks";
     private static final String PLANNER_TASKS_COLLECTION = "plannerTasks";
+    private static final String SEMESTERS_COLLECTION = "semesters";
+    private static final String EXAMS_COLLECTION = "exams";
+    private static final String ASSIGNMENTS_COLLECTION = "assignments";
+    private static final String FOCUS_PROFILES_COLLECTION = "focusProfiles";
 
     private Firestore getFirestore() {
         return FirestoreClient.getFirestore();
@@ -266,6 +274,171 @@ public class FirestoreService {
         }
     }
 
+    // ==================== SEMESTERS ====================
+
+    public Semester createSemester(Semester semester) throws ExecutionException, InterruptedException {
+        Firestore db = getFirestore();
+        Map<String, Object> data = semesterToMap(semester);
+        DocumentReference docRef = db.collection(SEMESTERS_COLLECTION).add(data).get();
+        semester.setId(docRef.getId());
+        return semester;
+    }
+
+    public List<Semester> getSemestersByUserId(String userId) throws ExecutionException, InterruptedException {
+        Firestore db = getFirestore();
+        Query query = db.collection(SEMESTERS_COLLECTION)
+                .whereEqualTo("userId", userId)
+                .orderBy("createdAt", Query.Direction.DESCENDING);
+        QuerySnapshot snapshot = query.get().get();
+        List<Semester> list = new ArrayList<>();
+        for (DocumentSnapshot doc : snapshot.getDocuments()) {
+            Semester s = mapToSemester(doc);
+            if (s != null) list.add(s);
+        }
+        return list;
+    }
+
+    public Semester updateSemester(String semesterId, Semester semester) throws ExecutionException, InterruptedException {
+        Firestore db = getFirestore();
+        DocumentReference docRef = db.collection(SEMESTERS_COLLECTION).document(semesterId);
+        Map<String, Object> updates = new HashMap<>();
+        if (semester.getSemesterName() != null) updates.put("semesterName", semester.getSemesterName());
+        if (semester.getStartDate() != null) updates.put("startDate", semester.getStartDate());
+        if (semester.getEndDate() != null) updates.put("endDate", semester.getEndDate());
+        if (semester.getStudyMode() != null) updates.put("studyMode", semester.getStudyMode());
+        if (semester.getRestDays() != null) updates.put("restDays", semester.getRestDays());
+        docRef.update(updates).get();
+        semester.setId(semesterId);
+        return semester;
+    }
+
+    public void deleteSemester(String semesterId) throws ExecutionException, InterruptedException {
+        getFirestore().collection(SEMESTERS_COLLECTION).document(semesterId).delete().get();
+    }
+
+    // ==================== EXAMS ====================
+
+    public Exam createExam(Exam exam) throws ExecutionException, InterruptedException {
+        Firestore db = getFirestore();
+        Map<String, Object> data = examToMap(exam);
+        DocumentReference docRef = db.collection(EXAMS_COLLECTION).add(data).get();
+        exam.setId(docRef.getId());
+        return exam;
+    }
+
+    public List<Exam> getExamsByUserId(String userId) throws ExecutionException, InterruptedException {
+        Firestore db = getFirestore();
+        Query query = db.collection(EXAMS_COLLECTION)
+                .whereEqualTo("userId", userId)
+                .orderBy("createdAt", Query.Direction.DESCENDING);
+        QuerySnapshot snapshot = query.get().get();
+        List<Exam> list = new ArrayList<>();
+        for (DocumentSnapshot doc : snapshot.getDocuments()) {
+            Exam e = mapToExam(doc);
+            if (e != null) list.add(e);
+        }
+        return list;
+    }
+
+    public Exam updateExam(String examId, Exam exam) throws ExecutionException, InterruptedException {
+        Firestore db = getFirestore();
+        DocumentReference docRef = db.collection(EXAMS_COLLECTION).document(examId);
+        Map<String, Object> updates = new HashMap<>();
+        if (exam.getCourseName() != null) updates.put("courseName", exam.getCourseName());
+        if (exam.getExamType() != null) updates.put("examType", exam.getExamType());
+        if (exam.getDate() != null) updates.put("date", exam.getDate());
+        if (exam.getWeightPercentage() != null) updates.put("weightPercentage", exam.getWeightPercentage());
+        docRef.update(updates).get();
+        exam.setId(examId);
+        return exam;
+    }
+
+    public void deleteExam(String examId) throws ExecutionException, InterruptedException {
+        getFirestore().collection(EXAMS_COLLECTION).document(examId).delete().get();
+    }
+
+    // ==================== ASSIGNMENTS ====================
+
+    public Assignment createAssignment(Assignment assignment) throws ExecutionException, InterruptedException {
+        Firestore db = getFirestore();
+        Map<String, Object> data = assignmentToMap(assignment);
+        DocumentReference docRef = db.collection(ASSIGNMENTS_COLLECTION).add(data).get();
+        assignment.setId(docRef.getId());
+        return assignment;
+    }
+
+    public List<Assignment> getAssignmentsByUserId(String userId) throws ExecutionException, InterruptedException {
+        Firestore db = getFirestore();
+        Query query = db.collection(ASSIGNMENTS_COLLECTION)
+                .whereEqualTo("userId", userId)
+                .orderBy("createdAt", Query.Direction.DESCENDING);
+        QuerySnapshot snapshot = query.get().get();
+        List<Assignment> list = new ArrayList<>();
+        for (DocumentSnapshot doc : snapshot.getDocuments()) {
+            Assignment a = mapToAssignment(doc);
+            if (a != null) list.add(a);
+        }
+        return list;
+    }
+
+    public Assignment updateAssignment(String assignmentId, Assignment assignment) throws ExecutionException, InterruptedException {
+        Firestore db = getFirestore();
+        DocumentReference docRef = db.collection(ASSIGNMENTS_COLLECTION).document(assignmentId);
+        Map<String, Object> updates = new HashMap<>();
+        if (assignment.getCourseName() != null) updates.put("courseName", assignment.getCourseName());
+        if (assignment.getAssignmentName() != null) updates.put("assignmentName", assignment.getAssignmentName());
+        if (assignment.getDeadline() != null) updates.put("deadline", assignment.getDeadline());
+        if (assignment.getDifficulty() != null) updates.put("difficulty", assignment.getDifficulty());
+        if (assignment.getType() != null) updates.put("type", assignment.getType());
+        docRef.update(updates).get();
+        assignment.setId(assignmentId);
+        return assignment;
+    }
+
+    public void deleteAssignment(String assignmentId) throws ExecutionException, InterruptedException {
+        getFirestore().collection(ASSIGNMENTS_COLLECTION).document(assignmentId).delete().get();
+    }
+
+    // ==================== FOCUS PROFILES ====================
+
+    public FocusProfile createFocusProfile(FocusProfile profile) throws ExecutionException, InterruptedException {
+        Firestore db = getFirestore();
+        Map<String, Object> data = focusProfileToMap(profile);
+        DocumentReference docRef = db.collection(FOCUS_PROFILES_COLLECTION).add(data).get();
+        profile.setId(docRef.getId());
+        return profile;
+    }
+
+    public List<FocusProfile> getFocusProfilesByUserId(String userId) throws ExecutionException, InterruptedException {
+        Firestore db = getFirestore();
+        Query query = db.collection(FOCUS_PROFILES_COLLECTION)
+                .whereEqualTo("userId", userId)
+                .orderBy("createdAt", Query.Direction.DESCENDING);
+        QuerySnapshot snapshot = query.get().get();
+        List<FocusProfile> list = new ArrayList<>();
+        for (DocumentSnapshot doc : snapshot.getDocuments()) {
+            FocusProfile f = mapToFocusProfile(doc);
+            if (f != null) list.add(f);
+        }
+        return list;
+    }
+
+    public FocusProfile updateFocusProfile(String profileId, FocusProfile profile) throws ExecutionException, InterruptedException {
+        Firestore db = getFirestore();
+        DocumentReference docRef = db.collection(FOCUS_PROFILES_COLLECTION).document(profileId);
+        Map<String, Object> updates = new HashMap<>();
+        if (profile.getPeakFocusTimes() != null) updates.put("peakFocusTimes", profile.getPeakFocusTimes());
+        if (profile.getLowEnergyTimes() != null) updates.put("lowEnergyTimes", profile.getLowEnergyTimes());
+        if (profile.getTypicalStudyDuration() != null) updates.put("typicalStudyDuration", profile.getTypicalStudyDuration());
+        docRef.update(updates).get();
+        profile.setId(profileId);
+        return profile;
+    }
+
+    public void deleteFocusProfile(String profileId) throws ExecutionException, InterruptedException {
+        getFirestore().collection(FOCUS_PROFILES_COLLECTION).document(profileId).delete().get();
+    }
+
     // ==================== HELPERS ====================
 
     private Map<String, Object> taskToMap(Task task) {
@@ -452,5 +625,134 @@ public class FirestoreService {
             t.setCreatedAt(LocalDateTime.ofInstant(ts.toDate().toInstant(), ZoneId.systemDefault()));
         }
         return t;
+    }
+
+    private Map<String, Object> semesterToMap(Semester s) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("userId", s.getUserId());
+        if (s.getSemesterName() != null) map.put("semesterName", s.getSemesterName());
+        if (s.getStartDate() != null) map.put("startDate", s.getStartDate());
+        if (s.getEndDate() != null) map.put("endDate", s.getEndDate());
+        if (s.getStudyMode() != null) map.put("studyMode", s.getStudyMode());
+        if (s.getRestDays() != null) map.put("restDays", s.getRestDays());
+        if (s.getCreatedAt() != null) {
+            map.put("createdAt", Timestamp.of(java.sql.Timestamp.from(
+                    s.getCreatedAt().atZone(ZoneId.systemDefault()).toInstant())));
+        }
+        return map;
+    }
+
+    private Semester mapToSemester(DocumentSnapshot doc) {
+        if (doc == null || !doc.exists()) return null;
+        Semester s = new Semester();
+        s.setId(doc.getId());
+        s.setUserId(doc.getString("userId"));
+        s.setSemesterName(doc.getString("semesterName"));
+        s.setStartDate(doc.getString("startDate"));
+        s.setEndDate(doc.getString("endDate"));
+        s.setStudyMode(doc.getString("studyMode"));
+        Object restDaysObj = doc.get("restDays");
+        List<String> restDays = restDaysObj != null ? (List<String>) restDaysObj : null;
+        s.setRestDays(restDays);
+        Timestamp ts = doc.getTimestamp("createdAt");
+        if (ts != null) {
+            s.setCreatedAt(LocalDateTime.ofInstant(ts.toDate().toInstant(), ZoneId.systemDefault()));
+        }
+        return s;
+    }
+
+    private Map<String, Object> examToMap(Exam e) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("userId", e.getUserId());
+        if (e.getCourseName() != null) map.put("courseName", e.getCourseName());
+        if (e.getExamType() != null) map.put("examType", e.getExamType());
+        if (e.getDate() != null) map.put("date", e.getDate());
+        if (e.getWeightPercentage() != null) map.put("weightPercentage", e.getWeightPercentage());
+        if (e.getCreatedAt() != null) {
+            map.put("createdAt", Timestamp.of(java.sql.Timestamp.from(
+                    e.getCreatedAt().atZone(ZoneId.systemDefault()).toInstant())));
+        }
+        return map;
+    }
+
+    private Exam mapToExam(DocumentSnapshot doc) {
+        if (doc == null || !doc.exists()) return null;
+        Exam e = new Exam();
+        e.setId(doc.getId());
+        e.setUserId(doc.getString("userId"));
+        e.setCourseName(doc.getString("courseName"));
+        e.setExamType(doc.getString("examType"));
+        e.setDate(doc.getString("date"));
+        Double weight = doc.getDouble("weightPercentage");
+        e.setWeightPercentage(weight);
+        Timestamp ts = doc.getTimestamp("createdAt");
+        if (ts != null) {
+            e.setCreatedAt(LocalDateTime.ofInstant(ts.toDate().toInstant(), ZoneId.systemDefault()));
+        }
+        return e;
+    }
+
+    private Map<String, Object> assignmentToMap(Assignment a) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("userId", a.getUserId());
+        if (a.getCourseName() != null) map.put("courseName", a.getCourseName());
+        if (a.getAssignmentName() != null) map.put("assignmentName", a.getAssignmentName());
+        if (a.getDeadline() != null) map.put("deadline", a.getDeadline());
+        if (a.getDifficulty() != null) map.put("difficulty", a.getDifficulty());
+        if (a.getType() != null) map.put("type", a.getType());
+        if (a.getCreatedAt() != null) {
+            map.put("createdAt", Timestamp.of(java.sql.Timestamp.from(
+                    a.getCreatedAt().atZone(ZoneId.systemDefault()).toInstant())));
+        }
+        return map;
+    }
+
+    private Assignment mapToAssignment(DocumentSnapshot doc) {
+        if (doc == null || !doc.exists()) return null;
+        Assignment a = new Assignment();
+        a.setId(doc.getId());
+        a.setUserId(doc.getString("userId"));
+        a.setCourseName(doc.getString("courseName"));
+        a.setAssignmentName(doc.getString("assignmentName"));
+        a.setDeadline(doc.getString("deadline"));
+        a.setDifficulty(doc.getString("difficulty"));
+        a.setType(doc.getString("type"));
+        Timestamp ts = doc.getTimestamp("createdAt");
+        if (ts != null) {
+            a.setCreatedAt(LocalDateTime.ofInstant(ts.toDate().toInstant(), ZoneId.systemDefault()));
+        }
+        return a;
+    }
+
+    private Map<String, Object> focusProfileToMap(FocusProfile f) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("userId", f.getUserId());
+        if (f.getPeakFocusTimes() != null) map.put("peakFocusTimes", f.getPeakFocusTimes());
+        if (f.getLowEnergyTimes() != null) map.put("lowEnergyTimes", f.getLowEnergyTimes());
+        if (f.getTypicalStudyDuration() != null) map.put("typicalStudyDuration", f.getTypicalStudyDuration());
+        if (f.getCreatedAt() != null) {
+            map.put("createdAt", Timestamp.of(java.sql.Timestamp.from(
+                    f.getCreatedAt().atZone(ZoneId.systemDefault()).toInstant())));
+        }
+        return map;
+    }
+
+    private FocusProfile mapToFocusProfile(DocumentSnapshot doc) {
+        if (doc == null || !doc.exists()) return null;
+        FocusProfile f = new FocusProfile();
+        f.setId(doc.getId());
+        f.setUserId(doc.getString("userId"));
+        Object peakObj = doc.get("peakFocusTimes");
+        List<String> peak = peakObj != null ? (List<String>) peakObj : null;
+        f.setPeakFocusTimes(peak);
+        Object lowObj = doc.get("lowEnergyTimes");
+        List<String> low = lowObj != null ? (List<String>) lowObj : null;
+        f.setLowEnergyTimes(low);
+        f.setTypicalStudyDuration(doc.getString("typicalStudyDuration"));
+        Timestamp ts = doc.getTimestamp("createdAt");
+        if (ts != null) {
+            f.setCreatedAt(LocalDateTime.ofInstant(ts.toDate().toInstant(), ZoneId.systemDefault()));
+        }
+        return f;
     }
 }

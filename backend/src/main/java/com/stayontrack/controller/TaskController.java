@@ -11,7 +11,7 @@ import com.stayontrack.service.FirestoreService;
 
 @RestController
 @RequestMapping("/api/tasks")
-@CrossOrigin(origins = "*")
+@CrossOrigin("*")
 public class TaskController {
 
     private final FirestoreService firestoreService;

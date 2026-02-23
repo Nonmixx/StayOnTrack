@@ -10,7 +10,7 @@ import com.stayontrack.service.FirestoreService;
 
 @RestController
 @RequestMapping("/api/weekly-checkins")
-@CrossOrigin(origins = "*")
+@CrossOrigin("*")
 public class WeeklyCheckInController {
 
     private final FirestoreService firestoreService;
