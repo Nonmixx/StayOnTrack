@@ -44,8 +44,12 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _loadData() async {
     try {
-      final tasks = await PlannerApi.getTodaysTasks();
+      var tasks = await PlannerApi.getTodaysTasks();
       final deadlines = await PlannerApi.getDeadlines();
+      if (tasks.isEmpty && deadlines.isNotEmpty) {
+        await PlannerApi.generatePlan(availableHours: 20);
+        tasks = await PlannerApi.getTodaysTasks();
+      }
       Deadline? nearest;
       final now = DateTime.now();
       for (final d in deadlines) {
@@ -68,26 +72,7 @@ class _HomePageState extends State<HomePage> {
           if (due.isBefore(nearestDue)) nearest = d;
         } catch (_) {}
       }
-      // When API returns no tasks, show all deadlines from store in Today's Tasks
       List<PlannerTask> displayTasks = tasks;
-      if (displayTasks.isEmpty && deadlineStore.items.isNotEmpty) {
-        displayTasks = deadlineStore.items.map((item) {
-          final dueStr = item.dueDate != null
-              ? '${item.dueDate!.year}-${item.dueDate!.month.toString().padLeft(2, '0')}-${item.dueDate!.day.toString().padLeft(2, '0')}'
-              : null;
-          final id = _storeTaskId(item);
-          return PlannerTask(
-            id: id,
-            title: item.title,
-            course: item.courseName,
-            duration: item.difficulty,
-            completed: _demoCompletedIds.contains(id),
-            dueDate: dueStr,
-            difficulty: item.difficulty,
-            status: null,
-          );
-        }).toList();
-      }
       // When API returns no deadlines, compute nearest from store
       if (nearest == null && deadlineStore.items.isNotEmpty) {
         DateTime? nearestDue;
@@ -134,7 +119,7 @@ class _HomePageState extends State<HomePage> {
           _demoCompletedIds.remove(taskId);
         }
         _tasks = _tasks.map((t) {
-          if (t.id == taskId) return PlannerTask(id: t.id, title: t.title, course: t.course, duration: t.duration, completed: completed, dueDate: t.dueDate, difficulty: t.difficulty, status: t.status);
+          if (t.id == taskId) return PlannerTask(id: t.id, title: t.title, course: t.course, duration: t.duration, completed: completed, dueDate: t.dueDate, scheduledStartTime: t.scheduledStartTime, difficulty: t.difficulty, status: t.status);
           return t;
         }).toList();
       });
@@ -450,17 +435,14 @@ class _HomePageState extends State<HomePage> {
                       else if (_tasks.isEmpty)
                         EmptyStateCard(
                           icon: Icons.check_circle_outline,
-                          title: 'No tasks for today',
+                          title: 'No study plan for today',
                           subtitle: _nearestDeadline != null
-                              ? 'Your plan will appear here. Use Weekly Check-In to update your plan based on your condition.'
+                              ? 'Complete the Focus & Energy profile setup to generate your AI study schedule with time slots.'
                               : 'Set up your plan in Settings first (add deadlines). You may add all your exams, assignments or any other tasks there.',
-                          buttonLabel: _nearestDeadline != null ? 'Weekly Check-In' : 'Go to Settings',
+                          buttonLabel: _nearestDeadline != null ? 'Complete Setup' : 'Go to Settings',
                           onButtonTap: () {
                             if (_nearestDeadline != null) {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (context) => const WeeklyCheckInPage()),
-                              );
+                              Navigator.of(context).pushNamed(AppRoutes.focusAndEnergyProfile);
                             } else {
                               AppNav.goToSettings(context);
                             }
@@ -476,6 +458,7 @@ class _HomePageState extends State<HomePage> {
                               title: t.title,
                               course: t.course,
                               duration: t.duration,
+                              timeSlot: t.timeSlotDisplay,
                               onChanged: (value) => _toggleTask(t.id, value ?? false),
                             ),
                           );
@@ -626,6 +609,7 @@ class TaskItemWidget extends StatelessWidget {
   final String title;
   final String course;
   final String duration;
+  final String? timeSlot;
   final ValueChanged<bool?>? onChanged;
 
   const TaskItemWidget({
@@ -634,6 +618,7 @@ class TaskItemWidget extends StatelessWidget {
     required this.title,
     required this.course,
     required this.duration,
+    this.timeSlot,
     this.onChanged,
   }) : super(key: key);
 
@@ -675,6 +660,19 @@ class TaskItemWidget extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (timeSlot != null) ...[
+                  Text(
+                    timeSlot!,
+                    style: const TextStyle(
+                      fontFamily: 'Arimo',
+                      fontSize: 12,
+                      height: 1.33,
+                      color: Color(0xFF7E93CC),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                ],
                 Text(
                   title,
                   style: TextStyle(

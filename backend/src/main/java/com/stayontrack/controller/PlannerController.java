@@ -84,7 +84,7 @@ public class PlannerController {
             @RequestParam(defaultValue = "20") int availableHours) {
         try {
             PlannerWeek week = plannerEngine.generateNextWeek(userId, availableHours);
-            return ResponseEntity.ok(week);
+            return week != null ? ResponseEntity.ok(week) : ResponseEntity.internalServerError().build();
         } catch (Exception e) {
             e.printStackTrace();
             return ResponseEntity.internalServerError().build();
@@ -129,6 +129,23 @@ public class PlannerController {
         } catch (Exception e) {
             e.printStackTrace();
             return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    /**
+     * Get planner task count for a month (for Monthly view workload summary).
+     */
+    @GetMapping("/month-tasks")
+    public ResponseEntity<Integer> getMonthTaskCount(
+            @RequestParam(defaultValue = "default-user") String userId,
+            @RequestParam int year,
+            @RequestParam int month) {
+        try {
+            int count = firestoreService.getPlannerTaskCountForMonth(userId, year, month);
+            return ResponseEntity.ok(count);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.ok(0);
         }
     }
 }

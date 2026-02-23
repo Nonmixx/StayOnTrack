@@ -1,11 +1,9 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 
-/// Base URL for the StayOnTrack backend.
-/// - Chrome/Windows: localhost works
-/// - Android emulator: use http://10.0.2.2:9091
-/// - Physical device: use your PC's IP (e.g. http://192.168.1.x:9091)
-const String baseUrl = 'http://localhost:9091';
+/// Backend URL. 10.0.2.2 = Android emulator; localhost = web/desktop.
+String get baseUrl => kIsWeb ? 'http://localhost:9091' : 'http://10.0.2.2:9091';
 
 ///Planner Engine API client.
 class PlannerApi {
@@ -81,12 +79,30 @@ class PlannerApi {
   }
 
   /// Generate initial plan (after setup).
+  /// Returns null on failure. Check res.statusCode for debugging.
   static Future<PlannerWeek?> generatePlan({int availableHours = 20}) async {
-    final res = await http.post(
-      Uri.parse('$baseUrl/api/planner/generate?userId=$_userId&availableHours=$availableHours'),
-    );
-    if (res.statusCode != 200) return null;
-    return PlannerWeek.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+    try {
+      final res = await http.post(
+        Uri.parse('$baseUrl/api/planner/generate?userId=$_userId&availableHours=$availableHours'),
+      ).timeout(const Duration(seconds: 60));
+      if (res.statusCode != 200) return null;
+      return PlannerWeek.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Get planner task count for a month (for workload summary).
+  static Future<int> getMonthTaskCount(int year, int month) async {
+    try {
+      final res = await http
+          .get(Uri.parse('$baseUrl/api/planner/month-tasks?userId=$_userId&year=$year&month=$month'))
+          .timeout(const Duration(seconds: 5));
+      if (res.statusCode != 200) return 0;
+      return int.tryParse(res.body) ?? 0;
+    } catch (_) {
+      return 0;
+    }
   }
 
   /// Get deadlines (for planner month view, nearest deadline for alert).
@@ -100,6 +116,75 @@ class PlannerApi {
       return list.map((e) => Deadline.fromJson(e as Map<String, dynamic>)).toList();
     } catch (_) {
       return [];
+    }
+  }
+
+  /// Create a deadline (saves to Firebase via backend).
+  static Future<Deadline?> createDeadline({
+    required String title,
+    required String course,
+    required DateTime? dueDate,
+    String type = 'assignment',
+  }) async {
+    try {
+      final body = jsonEncode({
+        'title': title,
+        'course': course,
+        'dueDate': dueDate != null
+            ? '${dueDate.year}-${dueDate.month.toString().padLeft(2, '0')}-${dueDate.day.toString().padLeft(2, '0')}'
+            : null,
+        'type': type,
+      });
+      final res = await http.post(
+        Uri.parse('$baseUrl/api/deadlines?userId=$_userId'),
+        headers: {'Content-Type': 'application/json'},
+        body: body,
+      ).timeout(const Duration(seconds: 10));
+      if (res.statusCode != 200) return null;
+      return Deadline.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Update a deadline.
+  static Future<Deadline?> updateDeadline({
+    required String id,
+    required String title,
+    required String course,
+    required DateTime? dueDate,
+    String type = 'assignment',
+  }) async {
+    try {
+      final body = jsonEncode({
+        'title': title,
+        'course': course,
+        'dueDate': dueDate != null
+            ? '${dueDate.year}-${dueDate.month.toString().padLeft(2, '0')}-${dueDate.day.toString().padLeft(2, '0')}'
+            : null,
+        'type': type,
+      });
+      final res = await http.put(
+        Uri.parse('$baseUrl/api/deadlines/$id?userId=$_userId'),
+        headers: {'Content-Type': 'application/json'},
+        body: body,
+      ).timeout(const Duration(seconds: 10));
+      if (res.statusCode != 200) return null;
+      return Deadline.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Delete a deadline.
+  static Future<bool> deleteDeadline(String id) async {
+    try {
+      final res = await http.delete(
+        Uri.parse('$baseUrl/api/deadlines/$id?userId=$_userId'),
+      ).timeout(const Duration(seconds: 10));
+      return res.statusCode == 200 || res.statusCode == 204;
+    } catch (_) {
+      return false;
     }
   }
 }
@@ -135,6 +220,7 @@ class PlannerTask {
   final String duration;
   final bool completed;
   final String? dueDate;
+  final DateTime? scheduledStartTime;
   final String? difficulty;
   final String? status;
 
@@ -145,6 +231,7 @@ class PlannerTask {
     required this.duration,
     required this.completed,
     this.dueDate,
+    this.scheduledStartTime,
     this.difficulty,
     this.status,
   });
@@ -154,6 +241,20 @@ class PlannerTask {
     final d = json['dueDate'];
     if (d is String) dueDateStr = d;
     else if (d is List && d.length >= 3) dueDateStr = '${d[0]}-${d[1].toString().padLeft(2, '0')}-${d[2].toString().padLeft(2, '0')}';
+    DateTime? scheduledStart;
+    final st = json['scheduledStartTime'];
+    if (st != null) {
+      if (st is String) scheduledStart = DateTime.tryParse(st);
+      else if (st is List && st.length >= 5) {
+        scheduledStart = DateTime(
+          (st[0] as num).toInt(),
+          (st[1] as num).toInt(),
+          (st[2] as num).toInt(),
+          (st[3] as num).toInt(),
+          (st[4] as num).toInt(),
+        );
+      }
+    }
     return PlannerTask(
       id: json['id'] as String? ?? '',
       title: json['title'] as String? ?? '',
@@ -161,9 +262,37 @@ class PlannerTask {
       duration: json['duration'] as String? ?? '',
       completed: json['completed'] as bool? ?? false,
       dueDate: dueDateStr,
+      scheduledStartTime: scheduledStart,
       difficulty: json['difficulty'] as String?,
       status: json['status'] as String?,
     );
+  }
+
+  /// Format time slot for display, e.g. "3:00 PM – 5:00 PM".
+  String? get timeSlotDisplay {
+    if (scheduledStartTime == null) return null;
+    final start = scheduledStartTime!;
+    final end = _parseDurationToMinutes(duration);
+    final endTime = start.add(Duration(minutes: end));
+    return '${_formatTime(start)} – ${_formatTime(endTime)}';
+  }
+
+  static int _parseDurationToMinutes(String dur) {
+    final lower = dur.toLowerCase();
+    final h = RegExp(r'(\d+(?:\.\d+)?)\s*(?:hour|hours|h)').firstMatch(lower);
+    final m = RegExp(r'(\d+)\s*(?:minute|minutes|min|m)').firstMatch(lower);
+    int mins = 60;
+    if (h != null) mins = (double.parse(h.group(1)!) * 60).round();
+    if (m != null) mins = (h != null ? mins : 0) + int.parse(m.group(1)!);
+    return mins;
+  }
+
+  static String _formatTime(DateTime dt) {
+    final h = dt.hour;
+    final m = dt.minute;
+    final am = h < 12;
+    final hour = h == 0 ? 12 : (h > 12 ? h - 12 : h);
+    return '${hour}:${m.toString().padLeft(2, '0')} ${am ? 'AM' : 'PM'}';
   }
 }
 

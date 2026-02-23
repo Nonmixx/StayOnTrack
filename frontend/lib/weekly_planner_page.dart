@@ -28,13 +28,15 @@ class _WeeklyPlannerPageState extends State<WeeklyPlannerPage> {
   Future<void> _loadData() async {
     try {
       final weekStart = CalendarUtils.toIso(_normalizedWeekStart);
-      final results = await Future.wait([
-        PlannerApi.getWeekTasks(weekStart),
-        PlannerApi.getDeadlines(),
-      ]);
+      var tasks = await PlannerApi.getWeekTasks(weekStart);
+      final deadlines = await PlannerApi.getDeadlines();
+      if (tasks.isEmpty && deadlines.isNotEmpty) {
+        await PlannerApi.generatePlan(availableHours: 20);
+        tasks = await PlannerApi.getWeekTasks(weekStart);
+      }
       if (mounted) setState(() {
-        _tasks = results[0] as List<PlannerTask>;
-        _deadlines = results[1] as List<Deadline>;
+        _tasks = tasks;
+        _deadlines = deadlines;
         _loading = false;
       });
     } catch (_) {
@@ -174,10 +176,10 @@ class _WeeklyPlannerPageState extends State<WeeklyPlannerPage> {
                           if (_tasks.isEmpty)
                             EmptyStateCard(
                               icon: Icons.calendar_today_outlined,
-                              title: 'No tasks for this week',
+                              title: 'No study plan for this week',
                               subtitle: _deadlines.isEmpty
                                   ? 'Set up your plan in Settings first (add deadlines). You may add all your exams, assignments or any other tasks there.'
-                                  : 'Use Weekly Check-In to generate or update your plan based on your condition.',
+                                  : 'Complete the setup flow (Focus & Energy profile) to generate your AI study schedule. Or use Weekly Check-In to update your plan.',
                               buttonLabel: _deadlines.isEmpty ? 'Go to Settings' : 'Weekly Check-In',
                               onButtonTap: () {
                                 if (_deadlines.isEmpty) {
@@ -205,6 +207,14 @@ class _WeeklyPlannerPageState extends State<WeeklyPlannerPage> {
     for (final t in _tasks) {
       final day = t.dueDate != null ? _dayFromIso(t.dueDate!) : 'Unknown';
       map.putIfAbsent(day, () => []).add(t);
+    }
+    for (final list in map.values) {
+      list.sort((a, b) {
+        if (a.scheduledStartTime == null && b.scheduledStartTime == null) return 0;
+        if (a.scheduledStartTime == null) return 1;
+        if (b.scheduledStartTime == null) return -1;
+        return a.scheduledStartTime!.compareTo(b.scheduledStartTime!);
+      });
     }
     final order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     final sorted = <String, List<PlannerTask>>{};
@@ -357,6 +367,19 @@ class DailyTaskCard extends StatelessWidget {
                                   decoration: t.completed ? TextDecoration.lineThrough : null,
                                 ),
                               ),
+                              if (t.timeSlotDisplay != null) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  t.timeSlotDisplay!,
+                                  style: const TextStyle(
+                                    fontFamily: 'Arimo',
+                                    fontSize: 12,
+                                    height: 1.33,
+                                    color: Color(0xFF7E93CC),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
                               const SizedBox(height: 4),
                               Row(
                                 children: [

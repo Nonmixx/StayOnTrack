@@ -16,20 +16,27 @@ public class PlannerTask {
     private String duration;
     private boolean completed;
     private LocalDate dueDate;
-    private String difficulty; // LOW, MEDIUM, HIGH
-    private String status;     // ON_TRACK, AT_RISK
+    private LocalDateTime scheduledStartTime;
+    private String difficulty;
+    private String status;
     private LocalDateTime createdAt;
 
     public PlannerTask() {}
 
     public PlannerTask(String plannerWeekId, String userId, String title, String course,
                        String duration, LocalDate dueDate, String difficulty) {
+        this(plannerWeekId, userId, title, course, duration, dueDate, null, difficulty);
+    }
+
+    public PlannerTask(String plannerWeekId, String userId, String title, String course,
+                       String duration, LocalDate dueDate, LocalDateTime scheduledStartTime, String difficulty) {
         this.plannerWeekId = plannerWeekId;
         this.userId = userId;
         this.title = title;
         this.course = course;
         this.duration = duration;
         this.dueDate = dueDate;
+        this.scheduledStartTime = scheduledStartTime;
         this.difficulty = difficulty != null ? difficulty : "MEDIUM";
         this.status = "ON_TRACK";
         this.completed = false;
@@ -59,6 +66,9 @@ public class PlannerTask {
 
     public LocalDate getDueDate() { return dueDate; }
     public void setDueDate(LocalDate dueDate) { this.dueDate = dueDate; }
+
+    public LocalDateTime getScheduledStartTime() { return scheduledStartTime; }
+    public void setScheduledStartTime(LocalDateTime scheduledStartTime) { this.scheduledStartTime = scheduledStartTime; }
 
     public String getDifficulty() { return difficulty; }
     public void setDifficulty(String difficulty) { this.difficulty = difficulty; }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'routes.dart';
+import 'api/planner_api.dart';
 import 'data/deadline_store.dart';
 
 /// Assignments & Projects screen. Shown after Course and Exam Input (or via Skip to Assignments).
@@ -73,7 +74,7 @@ class _AssignmentAndProjectPageState extends State<AssignmentAndProjectPage> {
     }
   }
 
-  void _addAssignment() {
+  Future<void> _addAssignment() async {
     final course = _courseNameController.text.trim();
     final name = _assignmentNameController.text.trim();
     if (course.isEmpty || name.isEmpty) return;
@@ -84,19 +85,31 @@ class _AssignmentAndProjectPageState extends State<AssignmentAndProjectPage> {
       difficulty: _selectedDifficulty ?? 'Medium',
       isIndividual: _isIndividual,
     );
-    setState(() {
-      if (_editingIndex != null) {
-        _assignments[_editingIndex!] = entry;
-        _editingIndex = null;
-      } else {
-        _assignments.add(entry);
+    if (_editingIndex == null) {
+      final created = await PlannerApi.createDeadline(
+        title: name,
+        course: course,
+        dueDate: _deadline,
+        type: 'assignment',
+      );
+      if (created != null) {
         deadlineStore.add(DeadlineItem(
+          id: created.id,
           title: name,
           courseName: course,
           dueDate: _deadline,
           difficulty: _selectedDifficulty ?? 'Medium',
           isIndividual: _isIndividual,
         ));
+        await PlannerApi.generatePlan(availableHours: 20);
+      }
+    }
+    setState(() {
+      if (_editingIndex != null) {
+        _assignments[_editingIndex!] = entry;
+        _editingIndex = null;
+      } else {
+        _assignments.add(entry);
       }
       _courseNameController.clear();
       _assignmentNameController.clear();

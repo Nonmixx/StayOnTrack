@@ -187,7 +187,7 @@ class _WeeklyCheckInPageState extends State<WeeklyCheckInPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Your Feedback',
+                      'Adjust Next Week\'s Plan',
                       style: TextStyle(
                         fontFamily: 'Arimo',
                         fontSize: 16,
@@ -249,7 +249,7 @@ class _WeeklyCheckInPageState extends State<WeeklyCheckInPage> {
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      'Your feedback helps AI create a better plan for you.',
+                      'Use this when you\'re not satisfied with your current plan. Your feedback and available hours will regenerate next week only.',
                       style: TextStyle(
                         fontFamily: 'Arimo',
                         fontSize: 12,

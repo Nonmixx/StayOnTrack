@@ -2,6 +2,9 @@ package com.stayontrack.service;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
@@ -9,8 +12,10 @@ import java.util.concurrent.ExecutionException;
 import org.springframework.stereotype.Service;
 
 import com.stayontrack.model.Deadline;
+import com.stayontrack.model.FocusProfile;
 import com.stayontrack.model.PlannerTask;
 import com.stayontrack.model.PlannerWeek;
+import com.stayontrack.model.Semester;
 import com.stayontrack.model.dto.WeeklySummary;
 
 /**
@@ -29,24 +34,72 @@ public class PlannerEngineService {
     }
 
     /**
-     * Generate next week's planner from deadlines.
+     * Generate planner for the whole semester based on semester start/end dates.
      * Called when user completes setup or adds/edits deadlines.
      */
     public PlannerWeek generateNextWeek(String userId, int availableHours) throws ExecutionException, InterruptedException {
-        LocalDate nextMonday = getNextMonday(LocalDate.now());
-        LocalDate nextSunday = nextMonday.plusDays(6);
-
-        PlannerWeek week = new PlannerWeek(userId, nextMonday, nextSunday, availableHours);
-        firestoreService.createPlannerWeek(week);
-
         List<Deadline> deadlines = firestoreService.getDeadlinesByUserId(userId);
-        List<PlannerTask> tasks = distributeTasks(week, deadlines, availableHours, null);
+        List<Semester> semesters = firestoreService.getSemestersByUserId(userId);
 
-        for (PlannerTask task : tasks) {
-            firestoreService.createPlannerTask(task);
+        LocalDate planStart;
+        LocalDate planEnd;
+
+        LocalDate today = LocalDate.now();
+        LocalDate currentWeekStart = getWeekStart(today);
+        if (!semesters.isEmpty()) {
+            Semester s = semesters.get(0);
+            planStart = parseDate(s.getStartDate());
+            planEnd = parseDate(s.getEndDate());
+            if (planStart == null) planStart = currentWeekStart;
+            if (planEnd == null) planEnd = planStart.plusMonths(4);
+            if (planEnd.isBefore(planStart)) planEnd = planStart.plusWeeks(2);
+            planStart = getWeekStart(planStart);
+            // Ensure we always include current week and at least 4 weeks ahead
+            if (planEnd.isBefore(currentWeekStart.plusWeeks(4))) {
+                planEnd = currentWeekStart.plusWeeks(12);
+            }
+            if (planStart.isAfter(currentWeekStart)) {
+                planStart = currentWeekStart;
+            }
+        } else {
+            planStart = currentWeekStart;
+            planEnd = planStart.plusWeeks(12);
         }
 
-        return week;
+        LocalDate weekStart = planStart;
+        List<PlannerWeek> created = new ArrayList<>();
+        int maxWeeks = 24;
+        int weekCount = 0;
+        while (!weekStart.isAfter(planEnd) && weekCount < maxWeeks) {
+            PlannerWeek existing = firestoreService.getPlannerWeekByDate(userId, weekStart);
+            if (existing != null) {
+                firestoreService.deletePlannerTasksByWeekId(existing.getId());
+                firestoreService.deletePlannerWeek(existing.getId());
+            }
+            PlannerWeek week = new PlannerWeek(userId, weekStart, weekStart.plusDays(6), availableHours);
+            firestoreService.createPlannerWeek(week);
+            List<PlannerTask> tasks = distributeTasks(week, deadlines, availableHours, null, userId);
+            for (PlannerTask task : tasks) {
+                firestoreService.createPlannerTask(task);
+            }
+            created.add(week);
+            weekStart = weekStart.plusWeeks(1);
+            weekCount++;
+        }
+
+        return created.isEmpty() ? null : created.get(created.size() - 1);
+    }
+
+    private LocalDate parseDate(String s) {
+        if (s == null || s.isBlank()) return null;
+        try {
+            if (s.contains("-") && s.length() >= 10) {
+                return LocalDate.parse(s.substring(0, 10), DateTimeFormatter.ISO_LOCAL_DATE);
+            }
+            return null;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /**
@@ -64,7 +117,7 @@ public class PlannerEngineService {
         PlannerWeek week = new PlannerWeek(userId, getNextMonday(LocalDate.now()), getNextMonday(LocalDate.now()).plusDays(6), availableHours);
         firestoreService.createPlannerWeek(week);
         List<Deadline> deadlines = firestoreService.getDeadlinesByUserId(userId);
-        List<PlannerTask> tasks = distributeTasks(week, deadlines, availableHours, feedback);
+        List<PlannerTask> tasks = distributeTasks(week, deadlines, availableHours, feedback, userId);
         for (PlannerTask task : tasks) {
             firestoreService.createPlannerTask(task);
         }
@@ -115,31 +168,69 @@ public class PlannerEngineService {
         return date.with(DayOfWeek.MONDAY);
     }
 
-    /**
-     * Distribute tasks across the week based on deadlines and available hours.
-     * Uses Google Gemini AI when API key is configured; otherwise rule-based.
-     */
-    private List<PlannerTask> distributeTasks(PlannerWeek week, List<Deadline> deadlines, int availableHours) {
-        return distributeTasks(week, deadlines, availableHours, null);
+    private static final String[] DAY_NAMES = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
+
+    private List<PlannerTask> distributeTasks(PlannerWeek week, List<Deadline> deadlines, int availableHours)
+            throws ExecutionException, InterruptedException {
+        return distributeTasks(week, deadlines, availableHours, null, week.getUserId());
     }
 
-    private List<PlannerTask> distributeTasks(PlannerWeek week, List<Deadline> deadlines, int availableHours, String feedback) {
+    private List<PlannerTask> distributeTasks(PlannerWeek week, List<Deadline> deadlines, int availableHours,
+            String feedback, String userId) throws ExecutionException, InterruptedException {
         List<PlannerTask> tasks = new ArrayList<>();
         LocalDate weekStart = week.getWeekStartDate();
         LocalDate weekEnd = week.getWeekEndDate();
 
+        List<String> peakFocus = null;
+        List<String> lowEnergy = null;
+        List<String> restDays = null;
+        String typicalDuration = null;
+        List<FocusProfile> focusProfiles = firestoreService.getFocusProfilesByUserId(userId);
+        if (!focusProfiles.isEmpty()) {
+            FocusProfile fp = focusProfiles.get(0);
+            peakFocus = fp.getPeakFocusTimes();
+            lowEnergy = fp.getLowEnergyTimes();
+            typicalDuration = fp.getTypicalStudyDuration();
+        }
+        List<Semester> semesters = firestoreService.getSemestersByUserId(userId);
+        if (!semesters.isEmpty() && semesters.get(0).getRestDays() != null) {
+            restDays = new ArrayList<>();
+            for (String d : semesters.get(0).getRestDays()) {
+                try {
+                    int n = Integer.parseInt(d.trim());
+                    if (n >= 1 && n <= 7) restDays.add(DAY_NAMES[n - 1]);
+                } catch (NumberFormatException ignored) {}
+            }
+        }
+
         if (geminiService.isAvailable()) {
-            List<String> suggestions = geminiService.generateTaskSuggestions(deadlines, availableHours, feedback);
-            for (int i = 0; i < suggestions.size(); i++) {
-                String[] parts = suggestions.get(i).split("\\|");
-                if (parts.length >= 3) {
-                    int dayIndex = Math.min(i % 5, 4);
-                    LocalDate taskDate = weekStart.plusDays(dayIndex);
-                    if (!taskDate.isAfter(weekEnd)) {
+            List<Deadline> relevantDeadlines = deadlines.stream()
+                    .filter(d -> d.getDueDate() != null && !d.getDueDate().isBefore(weekStart) && !d.getDueDate().isAfter(weekEnd.plusWeeks(2)))
+                    .toList();
+            if (relevantDeadlines.isEmpty() && !deadlines.isEmpty()) {
+                relevantDeadlines = deadlines.stream().filter(d -> d.getDueDate() != null).limit(10).toList();
+            }
+            List<String> suggestions = geminiService.generateTaskSuggestionsForWeek(
+                    relevantDeadlines.isEmpty() ? deadlines : relevantDeadlines, availableHours, feedback, weekStart, peakFocus, lowEnergy, restDays, typicalDuration);
+            for (String s : suggestions) {
+                String[] parts = s.split("\\|");
+                if (parts.length >= 4) {
+                    try {
+                        int day = Integer.parseInt(parts[3].trim());
+                        int dayIndex = Math.max(0, Math.min(day - 1, 6));
+                        LocalDate taskDate = weekStart.plusDays(dayIndex);
+                        if (taskDate.isAfter(weekEnd)) continue;
+                        int hour = 9, min = 0;
+                        if (parts.length >= 5) {
+                            String[] hm = parts[4].trim().split(":");
+                            if (hm.length >= 1) hour = Integer.parseInt(hm[0].trim());
+                            if (hm.length >= 2) min = Integer.parseInt(hm[1].trim());
+                        }
+                        LocalDateTime scheduledStart = taskDate.atTime(Math.min(23, Math.max(0, hour)), Math.min(59, Math.max(0, min)));
                         PlannerTask task = new PlannerTask(week.getId(), week.getUserId(),
-                                parts[0], parts[1], parts[2], taskDate, "MEDIUM");
+                                parts[0], parts[1], parts[2], taskDate, scheduledStart, "MEDIUM");
                         tasks.add(task);
-                    }
+                    } catch (NumberFormatException ignored) {}
                 }
             }
         }
@@ -149,6 +240,10 @@ public class PlannerEngineService {
             int dayIndex = 0;
             for (Deadline d : deadlines) {
                 if (d.getDueDate() == null || d.getDueDate().isAfter(weekEnd)) continue;
+                if (restDays != null && dayIndex < 7) {
+                    String dayName = DAY_NAMES[dayIndex % 7];
+                    if (restDays.contains(dayName)) { dayIndex++; continue; }
+                }
                 String taskTitle = buildTaskTitle(d);
                 String duration = "1 hour";
                 int hours = 1;
@@ -158,14 +253,15 @@ public class PlannerEngineService {
                 }
                 LocalDate taskDate = weekStart.plusDays(dayIndex % 7);
                 if (taskDate.isAfter(weekEnd)) taskDate = weekEnd;
-                PlannerTask task = new PlannerTask(week.getId(), week.getUserId(), taskTitle, d.getCourse(), duration, taskDate, "MEDIUM");
+                LocalDateTime scheduledStart = taskDate.atTime(9, 0);
+                PlannerTask task = new PlannerTask(week.getId(), week.getUserId(), taskTitle, d.getCourse(), duration, taskDate, scheduledStart, "MEDIUM");
                 tasks.add(task);
                 dayIndex += (hours / Math.max(1, hoursPerDay)) + 1;
             }
         }
 
         if (tasks.isEmpty()) {
-            tasks.addAll(createDefaultTasks(week, weekStart, availableHours));
+            tasks.addAll(createDefaultTasks(week, weekStart, availableHours, restDays));
         }
 
         return tasks;
@@ -179,19 +275,21 @@ public class PlannerEngineService {
         return "Work on " + d.getTitle();
     }
 
-    private List<PlannerTask> createDefaultTasks(PlannerWeek week, LocalDate weekStart, int availableHours) {
+    private List<PlannerTask> createDefaultTasks(PlannerWeek week, LocalDate weekStart, int availableHours, List<String> restDays) {
         List<PlannerTask> tasks = new ArrayList<>();
         String[] defaultTitles = {"Review lecture notes", "Practice problems", "Read textbook", "Assignment work"};
         String[] courses = {"General", "Study"};
         int hoursPerDay = Math.max(1, availableHours / 7);
         String duration = hoursPerDay + " hour" + (hoursPerDay > 1 ? "s" : "");
 
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 7; i++) {
             LocalDate date = weekStart.plusDays(i);
             if (date.getDayOfWeek() == DayOfWeek.SATURDAY || date.getDayOfWeek() == DayOfWeek.SUNDAY) continue;
+            if (restDays != null && restDays.contains(DAY_NAMES[i])) continue;
 
+            LocalDateTime scheduledStart = date.atTime(9, 0);
             PlannerTask task = new PlannerTask(week.getId(), week.getUserId(),
-                    defaultTitles[i % defaultTitles.length], courses[i % 2], duration, date, "MEDIUM");
+                    defaultTitles[i % defaultTitles.length], courses[i % 2], duration, date, scheduledStart, "MEDIUM");
             tasks.add(task);
         }
         return tasks;

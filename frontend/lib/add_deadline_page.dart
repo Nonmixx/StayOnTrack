@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 import 'app_nav.dart';
 import 'routes.dart';
+import 'api/planner_api.dart';
 import 'data/deadline_store.dart';
 
 /// Add Deadline screen. Opened from Home or Edit Deadlines.
-/// [editIndex] and initial fields set when editing an existing deadline.
+/// [editIndex] and [editId] set when editing an existing deadline.
 class AddDeadlinePage extends StatefulWidget {
   const AddDeadlinePage({
     super.key,
     this.editIndex,
+    this.editId,
     this.initialTitle,
     this.initialCourse,
     this.initialDueDate,
@@ -17,6 +19,7 @@ class AddDeadlinePage extends StatefulWidget {
   });
 
   final int? editIndex;
+  final String? editId;
   final String? initialTitle;
   final String? initialCourse;
   final DateTime? initialDueDate;
@@ -41,7 +44,7 @@ class _AddDeadlinePageState extends State<AddDeadlinePage> {
 
   static const _difficulties = ['Easy', 'Medium', 'Hard'];
 
-  bool get _isEditMode => widget.editIndex != null;
+  bool get _isEditMode => widget.editIndex != null || widget.editId != null;
 
   @override
   void initState() {
@@ -84,24 +87,78 @@ class _AddDeadlinePageState extends State<AddDeadlinePage> {
     }
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     final course = _courseNameController.text.trim();
     final title = _titleController.text.trim();
     if (course.isEmpty || title.isEmpty) return;
-    final item = DeadlineItem(
-      title: title,
-      courseName: course,
-      dueDate: _dueDate,
-      difficulty: _selectedDifficulty ?? 'Medium',
-      isIndividual: _isIndividual,
-    );
-    if (_isEditMode) {
+
+    if (_isEditMode && widget.editId != null) {
+      final updated = await PlannerApi.updateDeadline(
+        id: widget.editId!,
+        title: title,
+        course: course,
+        dueDate: _dueDate,
+        type: 'assignment',
+      );
+      if (updated != null && mounted) {
+        final item = DeadlineItem(
+          id: updated.id,
+          title: title,
+          courseName: course,
+          dueDate: _dueDate,
+          difficulty: _selectedDifficulty ?? 'Medium',
+          isIndividual: _isIndividual,
+        );
+        if (widget.editIndex != null) {
+          deadlineStore.updateAt(widget.editIndex!, item);
+        }
+        Navigator.of(context).pop();
+      } else if (mounted) {
+        _showErrorSnackBar('Failed to update. Please try again.');
+      }
+      return;
+    }
+
+    if (_isEditMode && widget.editIndex != null) {
+      final item = DeadlineItem(
+        title: title,
+        courseName: course,
+        dueDate: _dueDate,
+        difficulty: _selectedDifficulty ?? 'Medium',
+        isIndividual: _isIndividual,
+      );
       deadlineStore.updateAt(widget.editIndex!, item);
       Navigator.of(context).pop();
-    } else {
-      deadlineStore.add(item);
-      _showSuccessDialog();
+      return;
     }
+
+    final created = await PlannerApi.createDeadline(
+      title: title,
+      course: course,
+      dueDate: _dueDate,
+      type: 'assignment',
+    );
+    if (created != null && mounted) {
+      final item = DeadlineItem(
+        id: created.id,
+        title: title,
+        courseName: course,
+        dueDate: _dueDate,
+        difficulty: _selectedDifficulty ?? 'Medium',
+        isIndividual: _isIndividual,
+      );
+      deadlineStore.add(item);
+      await PlannerApi.generatePlan(availableHours: 20);
+      _showSuccessDialog();
+    } else if (mounted) {
+      _showErrorSnackBar('Failed to save. Is the backend running?');
+    }
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red.shade700),
+    );
   }
 
   void _showSuccessDialog() {

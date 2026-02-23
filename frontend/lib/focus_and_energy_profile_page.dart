@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'routes.dart';
+import 'api/planner_api.dart';
+import 'api/focus_api.dart';
 
 /// Focus & Energy Profile screen. Shown after Assignment and Project (or Skip to Focus Profile).
 class FocusAndEnergyProfilePage extends StatefulWidget {
@@ -84,12 +86,84 @@ class _FocusAndEnergyProfilePageState extends State<FocusAndEnergyProfilePage> {
     });
   }
 
-  void _generatePlan(BuildContext context) {
-    // TODO: Persist profile and generate plan
-    Navigator.of(context).pushNamedAndRemoveUntil(
-      AppRoutes.home,
-      (route) => false,
+  String get _typicalStudyDuration {
+    if (_isOtherDuration) return _otherDurationController.text.trim();
+    if (_studyDurationIndex != null && _studyDurationIndex! < _studyDurationOptions.length) {
+      return _studyDurationOptions[_studyDurationIndex!];
+    }
+    return '1 hour';
+  }
+
+  List<String> get _peakFocusLabels =>
+      _peakFocusIndices.map((i) => _peakFocusOptions[i]).toList();
+
+  List<String> get _lowEnergyLabels =>
+      _lowEnergyIndices.map((i) => _peakFocusOptions[i]).toList();
+
+  Future<void> _generatePlan(BuildContext context) async {
+    if (!context.mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const Center(
+        child: Card(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(color: Color(0xFF7E93CC)),
+                SizedBox(height: 16),
+                Text('Generating your study plan...'),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
+    try {
+      final profiles = await FocusApi.getFocusProfiles();
+      if (profiles.isEmpty) {
+        await FocusApi.createFocusProfile(
+          peakFocusTimes: _peakFocusLabels,
+          lowEnergyTimes: _lowEnergyLabels,
+          typicalStudyDuration: _typicalStudyDuration,
+        );
+      } else {
+        await FocusApi.updateFocusProfile(profiles.first.id,
+          peakFocusTimes: _peakFocusLabels,
+          lowEnergyTimes: _lowEnergyLabels,
+          typicalStudyDuration: _typicalStudyDuration,
+        );
+      }
+      final plan = await PlannerApi.generatePlan(availableHours: 20);
+      if (context.mounted) Navigator.of(context).pop();
+      if (context.mounted) {
+        if (plan != null) {
+          Navigator.of(context).pushNamedAndRemoveUntil(
+            AppRoutes.home,
+            (route) => false,
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to generate plan. Ensure backend is running (mvn spring-boot:run in backend folder).'),
+              duration: Duration(seconds: 5),
+            ),
+          );
+        }
+      }
+    } catch (_) {
+      if (context.mounted) Navigator.of(context).pop();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to generate plan. Ensure backend is running.'),
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+    }
   }
 
   @override

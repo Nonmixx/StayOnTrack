@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'routes.dart';
+import 'api/planner_api.dart';
 import 'data/deadline_store.dart';
 
 /// Course and Exam Input screen (Exam Schedule). Shown after Semester Setup.
@@ -122,7 +123,7 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
     }
   }
 
-  void _addExam() {
+  Future<void> _addExam() async {
     final course = _courseNameController.text.trim();
     if (course.isEmpty) return;
     final wasAdding = _editingIndex == null && _editingDeadlineStoreIndex == null;
@@ -148,19 +149,31 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
       Navigator.of(context).pop();
       return;
     }
-    setState(() {
-      if (_editingIndex != null) {
-        _exams[_editingIndex!] = entry;
-        _editingIndex = null;
-      } else {
-        _exams.add(entry);
+    if (_editingIndex == null) {
+      final created = await PlannerApi.createDeadline(
+        title: '$course - ${entry.examType}',
+        course: course,
+        dueDate: entry.date,
+        type: 'exam',
+      );
+      if (created != null) {
         deadlineStore.add(DeadlineItem(
+          id: created.id,
           title: '$course - ${entry.examType}',
           courseName: course,
           dueDate: entry.date,
           difficulty: entry.weight != null ? '${entry.weight}%' : '—',
           isIndividual: true,
         ));
+        await PlannerApi.generatePlan(availableHours: 20);
+      }
+    }
+    setState(() {
+      if (_editingIndex != null) {
+        _exams[_editingIndex!] = entry;
+        _editingIndex = null;
+      } else {
+        _exams.add(entry);
       }
       _clearForm();
     });

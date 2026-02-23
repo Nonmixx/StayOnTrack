@@ -52,6 +52,7 @@ class MyApp extends StatelessWidget {
           if (a == null) return const AddDeadlinePage();
           return AddDeadlinePage(
             editIndex: a['editIndex'] as int?,
+            editId: a['editId'] as String?,
             initialTitle: a['title'] as String?,
             initialCourse: a['courseName'] as String?,
             initialDueDate: a['dueDate'] as DateTime?,

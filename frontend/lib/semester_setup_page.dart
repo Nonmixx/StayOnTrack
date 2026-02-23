@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'routes.dart';
+import 'api/semester_api.dart';
 
 class SemesterSetupPage extends StatefulWidget {
   const SemesterSetupPage({super.key});
@@ -61,6 +62,25 @@ class _SemesterSetupPageState extends State<SemesterSetupPage> {
   }
 
   static const _weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+  Future<void> _onNext(BuildContext context) async {
+    if (_startDate == null || _endDate == null) return;
+    final name = _semesterNameController.text.trim();
+    final created = await SemesterApi.createSemester(
+      semesterName: name.isEmpty ? 'Semester' : name,
+      startDate: _startDate!,
+      endDate: _endDate!,
+      studyMode: _isFullTime ? 'full-time' : 'part-time',
+      restDays: _restDays.isEmpty ? null : _restDays.map((d) => d.toString()).toList(),
+    );
+    if (created != null && context.mounted) {
+      Navigator.of(context).pushNamed(AppRoutes.courseAndExamInput);
+    } else if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to save semester. Is the backend running?')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -230,10 +250,9 @@ class _SemesterSetupPageState extends State<SemesterSetupPage> {
                   SizedBox(
                     height: 52,
                     child: ElevatedButton(
-                      onPressed: () {
-                        // TODO: Persist semester setup (e.g. API or local storage)
-                        Navigator.of(context).pushNamed(AppRoutes.courseAndExamInput);
-                      },
+                      onPressed: _startDate == null || _endDate == null
+                          ? null
+                          : () => _onNext(context),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _lightPurple,
                         foregroundColor: Colors.white,

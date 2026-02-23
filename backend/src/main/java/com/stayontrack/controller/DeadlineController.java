@@ -44,6 +44,20 @@ public class DeadlineController {
         }
     }
 
+    @PutMapping("/{deadlineId}")
+    public ResponseEntity<Deadline> updateDeadline(@PathVariable String deadlineId,
+                                                    @RequestBody Deadline deadline,
+                                                    @RequestParam(defaultValue = "default-user") String userId) {
+        try {
+            deadline.setUserId(userId);
+            Deadline updated = firestoreService.updateDeadline(deadlineId, deadline);
+            return ResponseEntity.ok(updated);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
     @DeleteMapping("/{deadlineId}")
     public ResponseEntity<Void> deleteDeadline(@PathVariable String deadlineId) {
         try {

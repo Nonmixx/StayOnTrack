@@ -133,6 +133,22 @@ public class FirestoreService {
         return deadlines;
     }
 
+    public Deadline updateDeadline(String deadlineId, Deadline deadline) throws ExecutionException, InterruptedException {
+        Firestore db = getFirestore();
+        DocumentReference docRef = db.collection(DEADLINES_COLLECTION).document(deadlineId);
+        Map<String, Object> updates = new HashMap<>();
+        if (deadline.getTitle() != null) updates.put("title", deadline.getTitle());
+        if (deadline.getCourse() != null) updates.put("course", deadline.getCourse());
+        if (deadline.getType() != null) updates.put("type", deadline.getType());
+        if (deadline.getDueDate() != null) {
+            updates.put("dueDate", Timestamp.of(java.sql.Timestamp.from(
+                    deadline.getDueDate().atStartOfDay(ZoneId.systemDefault()).toInstant())));
+        }
+        docRef.update(updates).get();
+        deadline.setId(deadlineId);
+        return deadline;
+    }
+
     public void deleteDeadline(String deadlineId) throws ExecutionException, InterruptedException {
         getFirestore().collection(DEADLINES_COLLECTION).document(deadlineId).delete().get();
     }
@@ -246,6 +262,19 @@ public class FirestoreService {
         PlannerWeek week = getPlannerWeekByDate(userId, weekStartDate);
         if (week == null) return List.of();
         return getPlannerTasksByWeekId(week.getId());
+    }
+
+    public int getPlannerTaskCountForMonth(String userId, int year, int month) throws ExecutionException, InterruptedException {
+        LocalDate monthStart = LocalDate.of(year, month, 1);
+        LocalDate monthEnd = monthStart.plusMonths(1);
+        Instant start = monthStart.atStartOfDay(ZoneId.systemDefault()).toInstant();
+        Instant end = monthEnd.atStartOfDay(ZoneId.systemDefault()).toInstant();
+        Firestore db = getFirestore();
+        Query query = db.collection(PLANNER_TASKS_COLLECTION)
+                .whereEqualTo("userId", userId)
+                .whereGreaterThanOrEqualTo("dueDate", Timestamp.of(java.sql.Timestamp.from(start)))
+                .whereLessThan("dueDate", Timestamp.of(java.sql.Timestamp.from(end)));
+        return (int) query.get().get().size();
     }
 
     public PlannerTask updatePlannerTask(String taskId, PlannerTask task) throws ExecutionException, InterruptedException {
@@ -597,6 +626,10 @@ public class FirestoreService {
             map.put("dueDate", Timestamp.of(java.sql.Timestamp.from(
                     t.getDueDate().atStartOfDay(ZoneId.systemDefault()).toInstant())));
         }
+        if (t.getScheduledStartTime() != null) {
+            map.put("scheduledStartTime", Timestamp.of(java.sql.Timestamp.from(
+                    t.getScheduledStartTime().atZone(ZoneId.systemDefault()).toInstant())));
+        }
         if (t.getCreatedAt() != null) {
             map.put("createdAt", Timestamp.of(java.sql.Timestamp.from(
                     t.getCreatedAt().atZone(ZoneId.systemDefault()).toInstant())));
@@ -619,6 +652,10 @@ public class FirestoreService {
         Timestamp ts = doc.getTimestamp("dueDate");
         if (ts != null) {
             t.setDueDate(LocalDateTime.ofInstant(ts.toDate().toInstant(), ZoneId.systemDefault()).toLocalDate());
+        }
+        ts = doc.getTimestamp("scheduledStartTime");
+        if (ts != null) {
+            t.setScheduledStartTime(LocalDateTime.ofInstant(ts.toDate().toInstant(), ZoneId.systemDefault()));
         }
         ts = doc.getTimestamp("createdAt");
         if (ts != null) {

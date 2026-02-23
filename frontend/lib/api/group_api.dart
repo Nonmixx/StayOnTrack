@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 /// Base URL — same as PlannerApi
-const String _baseUrl = 'http://localhost:9091';
+import 'planner_api.dart' show baseUrl;
+String get _baseUrl => baseUrl;
 
 /// ── Data Models ──────────────────────────────────────────────────────────────
 

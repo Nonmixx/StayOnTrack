@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'app_nav.dart';
 import 'routes.dart';
+import 'api/planner_api.dart';
 import 'data/deadline_store.dart';
 
 /// Manage Deadlines page. View, edit, or delete deadlines. Similar to Added Assignments layout.
-/// List is driven by [deadlineStore] (shared with Add Deadline, exams, assignments).
+/// List is driven by [deadlineStore], synced with Firebase via API.
 class EditDeadlinesPage extends StatefulWidget {
   const EditDeadlinesPage({super.key});
 
@@ -26,6 +27,31 @@ class _EditDeadlinesPageState extends State<EditDeadlinesPage> {
   void initState() {
     super.initState();
     deadlineStore.addListener(_onStoreChanged);
+    _loadFromApi();
+  }
+
+  Future<void> _loadFromApi() async {
+    final deadlines = await PlannerApi.getDeadlines();
+    if (deadlines.isNotEmpty && mounted) {
+      final items = deadlines.map((d) {
+        DateTime? due;
+        if (d.dueDate != null) {
+          final parts = d.dueDate!.split('-');
+          if (parts.length >= 3) {
+            due = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+          }
+        }
+        return DeadlineItem(
+          id: d.id,
+          title: d.title,
+          courseName: d.course,
+          dueDate: due,
+          difficulty: 'Medium',
+          isIndividual: true,
+        );
+      }).toList();
+      deadlineStore.replaceAll(items);
+    }
   }
 
   @override
@@ -202,6 +228,7 @@ class _EditDeadlinesPageState extends State<EditDeadlinesPage> {
         AppRoutes.addDeadline,
         arguments: <String, dynamic>{
           'editIndex': index,
+          'editId': entry.id,
           'title': entry.title,
           'courseName': entry.courseName,
           'dueDate': entry.dueDate,
@@ -213,7 +240,9 @@ class _EditDeadlinesPageState extends State<EditDeadlinesPage> {
   }
 
   void _onDelete(int index) {
-    final title = deadlineStore.items[index].title;
+    final entry = deadlineStore.items[index];
+    final title = entry.title;
+    final id = entry.id;
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
@@ -227,9 +256,16 @@ class _EditDeadlinesPageState extends State<EditDeadlinesPage> {
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.of(context).pop();
-              deadlineStore.removeAt(index);
+              if (id != null) {
+                final ok = await PlannerApi.deleteDeadline(id);
+                if (ok && mounted) {
+                  deadlineStore.removeAt(index);
+                }
+              } else {
+                deadlineStore.removeAt(index);
+              }
             },
             child: const Text('Delete', style: TextStyle(color: Colors.red)),
           ),

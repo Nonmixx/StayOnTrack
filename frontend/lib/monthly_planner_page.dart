@@ -19,35 +19,15 @@ class _MonthlyPlannerPageState extends State<MonthlyPlannerPage> {
   @override
   void initState() {
     super.initState();
-    _loadDeadlines();
+    _loadData();
   }
 
-  Future<void> _loadDeadlines() async {
+  Future<void> _loadData() async {
     final list = await PlannerApi.getDeadlines();
     if (mounted) setState(() {
       _deadlines = list;
       _loading = false;
     });
-  }
-
-  int _examsInMonth() => _deadlines.where((d) {
-    final t = (d.type ?? '').toLowerCase();
-    return (t.contains('exam') || t.contains('midterm') || t.contains('final') || t.contains('quiz')) &&
-        _inMonth(d.dueDate);
-  }).length;
-
-  int _assignmentsInMonth() => _deadlines.where((d) {
-    final t = (d.type ?? '').toLowerCase();
-    return (t.contains('assignment') || t.contains('lab') || t.contains('project') || t == '') && _inMonth(d.dueDate);
-  }).length;
-
-  bool _inMonth(String? dueDate) {
-    if (dueDate == null) return false;
-    final parts = dueDate.split('-');
-    if (parts.length < 2) return false;
-    final dMonth = int.tryParse(parts[1]);
-    final dYear = int.tryParse(parts[0]);
-    return dMonth == widget.month.month && dYear == widget.month.year;
   }
 
   @override
@@ -159,43 +139,6 @@ class _MonthlyPlannerPageState extends State<MonthlyPlannerPage> {
                           ),
                           const SizedBox(height: 12),
                           ..._buildWeekCards(),
-                          const SizedBox(height: 16),
-                          // Workload Summary
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.only(left: 16, right: 16, top: 16),
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [Color(0xFFAFBCDD), Color(0xFFC8CEDF)],
-                              ),
-                              boxShadow: [
-                                BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 3, offset: const Offset(0, 1)),
-                                BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 2, offset: const Offset(0, 1)),
-                              ],
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Workload Summary',
-                                  style: TextStyle(
-                                    fontFamily: 'Arimo',
-                                    fontSize: 16,
-                                    height: 1.5,
-                                    color: Color(0xFFFFFFFF),
-                                    fontWeight: FontWeight.w400,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                _buildSummaryRow('Exams this month', '${_examsInMonth()}'),
-                                _buildSummaryRow('Assignments due', '${_assignmentsInMonth()}'),
-                                const SizedBox(height: 16),
-                              ],
-                            ),
-                          ),
                         ],
                       ),
                     ),
@@ -285,36 +228,6 @@ class _MonthlyPlannerPageState extends State<MonthlyPlannerPage> {
     return deadlines.map((d) => d.title).take(2).join(', ');
   }
 
-  Widget _buildSummaryRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontFamily: 'Arimo',
-              fontSize: 14,
-              height: 1.43,
-              color: Colors.white.withOpacity(0.9),
-              fontWeight: FontWeight.w400,
-            ),
-          ),
-          Text(
-            value,
-            style: TextStyle(
-              fontFamily: 'Arimo',
-              fontSize: 14,
-              height: 1.43,
-              color: Colors.white.withOpacity(0.9),
-              fontWeight: FontWeight.w400,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class CalendarDay extends StatelessWidget {

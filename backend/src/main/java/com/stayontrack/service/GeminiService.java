@@ -1,5 +1,7 @@
 package com.stayontrack.service;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -14,13 +16,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stayontrack.model.Deadline;
 
 /**
- * Google Gemini AI integration for plan generation.
- * Requires google.ai.api-key in application.properties or environment.
+ * Google Gemini AI integration for study planner generation.
+ * Generates time-slotted study schedules (e.g. Mon 3-6pm, 8-10pm).
  */
 @Service
 public class GeminiService {
 
-    // API endpoint (no key here). The API key from application.properties is passed as ?key=.
     private static final String GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final RestTemplate restTemplate = new RestTemplate();
@@ -33,34 +34,64 @@ public class GeminiService {
     }
 
     /**
-     * Ask Gemini to generate study tasks for the week based on deadlines.
+     * Generate a time-slotted study schedule for a week.
+     * Each task has: day (1=Mon..7=Sun), startTime (HH:mm 24h format), duration, title, course.
+     * Considers peak focus times (PREFER), low energy times (AVOID), rest days (SKIP).
      */
-    public List<String> generateTaskSuggestions(List<Deadline> deadlines, int availableHours, String feedback) {
+    public List<String> generateTaskSuggestionsForWeek(List<Deadline> deadlines, int availableHours,
+            String feedback, LocalDate weekStart, List<String> peakFocusTimes, List<String> lowEnergyTimes,
+            List<String> restDays, String typicalStudyDuration) {
         if (!isAvailable()) return List.of();
 
         try {
             StringBuilder prompt = new StringBuilder();
-            prompt.append("You are a study planner AI. Generate 5-7 specific study tasks for the next week. ");
-            prompt.append("Available study hours: ").append(availableHours).append(". ");
+            prompt.append("You are a study planner AI. Create a WEEKLY STUDY SCHEDULE with SPECIFIC TIME SLOTS for each task. ");
+            prompt.append("Each task MUST have a concrete time (e.g. Monday 3:00 PM, Tuesday 8:00 PM). ");
+            prompt.append("Spread tasks across the week. You may schedule 2-3 sessions per day when appropriate (e.g. morning 9am, afternoon 2pm, evening 7pm). ");
+            if (weekStart != null) {
+                prompt.append("Generate ONLY for this week starting ").append(weekStart.format(DateTimeFormatter.ISO_LOCAL_DATE)).append(". ");
+            }
+            prompt.append("Total study hours to schedule this week: ").append(availableHours).append(". ");
+            if (typicalStudyDuration != null && !typicalStudyDuration.isBlank()) {
+                prompt.append("Preferred session length: ").append(typicalStudyDuration).append(". ");
+            }
+            if (peakFocusTimes != null && !peakFocusTimes.isEmpty()) {
+                prompt.append("PREFER scheduling during: ").append(String.join(", ", peakFocusTimes)).append(". ");
+            }
+            if (lowEnergyTimes != null && !lowEnergyTimes.isEmpty()) {
+                prompt.append("AVOID scheduling during: ").append(String.join(", ", lowEnergyTimes)).append(". ");
+            }
+            if (restDays != null && !restDays.isEmpty()) {
+                prompt.append("DO NOT schedule on: ").append(String.join(", ", restDays)).append(". ");
+            }
             if (feedback != null && !feedback.isBlank()) {
                 prompt.append("User feedback: ").append(feedback).append(". ");
             }
             if (!deadlines.isEmpty()) {
-                prompt.append("Upcoming deadlines: ");
+                prompt.append("Create study tasks for these items (prioritize items due soon): ");
                 for (Deadline d : deadlines) {
-                    prompt.append(d.getCourse()).append(" ").append(d.getTitle())
-                            .append(" (").append(d.getType()).append(") due soon. ");
+                    String due = d.getDueDate() != null ? d.getDueDate().format(DateTimeFormatter.ISO_LOCAL_DATE) : "?";
+                    prompt.append(d.getCourse()).append(" ").append(d.getTitle()).append(" (").append(d.getType()).append(") due ").append(due).append("; ");
                 }
             }
-            prompt.append("Return ONLY a JSON array of task objects, each with: title, course, duration (e.g. \"1 hour\"), day (1-5 for Mon-Fri). ");
-            prompt.append("Example: [{\"title\":\"Review Chapter 5\",\"course\":\"CS1234\",\"duration\":\"1.5 hours\",\"day\":1}]");
+            prompt.append("Return ONLY a JSON array. Each object: day (1=Mon..7=Sun), startTime (HH:mm 24h), duration (e.g. \"2 hours\"), title, course. ");
+            prompt.append("Spread across days. Example: [{\"day\":1,\"startTime\":\"15:00\",\"duration\":\"2 hours\",\"title\":\"Review Chapter 5\",\"course\":\"CS1234\"},{\"day\":1,\"startTime\":\"19:00\",\"duration\":\"1 hour\",\"title\":\"Practice problems\",\"course\":\"CS1234\"}]");
 
             String response = callGemini(prompt.toString());
-            return parseTaskSuggestions(response);
+            return parseTimeSlottedSuggestions(response);
         } catch (Exception e) {
             e.printStackTrace();
             return List.of();
         }
+    }
+
+    public List<String> generateTaskSuggestions(List<Deadline> deadlines, int availableHours, String feedback) {
+        return generateTaskSuggestionsForWeek(deadlines, availableHours, feedback, null, null, null, null, null);
+    }
+
+    public List<String> generateTaskSuggestionsForWeek(List<Deadline> deadlines, int availableHours,
+            String feedback, LocalDate weekStart) {
+        return generateTaskSuggestionsForWeek(deadlines, availableHours, feedback, weekStart, null, null, null, null);
     }
 
     private String callGemini(String prompt) throws Exception {
@@ -70,8 +101,8 @@ public class GeminiService {
                         "parts", List.of(java.util.Map.of("text", prompt))
                 )),
                 "generationConfig", java.util.Map.of(
-                        "temperature", 0.7,
-                        "maxOutputTokens", 1024
+                        "temperature", 0.5,
+                        "maxOutputTokens", 2048
                 )
         ));
 
@@ -90,6 +121,30 @@ public class GeminiService {
         return content.get(0).path("text").asText();
     }
 
+    private List<String> parseTimeSlottedSuggestions(String response) {
+        List<String> tasks = new java.util.ArrayList<>();
+        try {
+            String json = response;
+            int start = json.indexOf('[');
+            int end = json.lastIndexOf(']');
+            if (start >= 0 && end > start) {
+                json = json.substring(start, end + 1);
+            }
+            JsonNode arr = objectMapper.readTree(json);
+            for (JsonNode node : arr) {
+                String title = node.path("title").asText();
+                String course = node.path("course").asText("General");
+                String duration = node.path("duration").asText("1 hour");
+                int day = node.path("day").asInt(1);
+                String startTime = node.path("startTime").asText("09:00");
+                tasks.add(title + "|" + course + "|" + duration + "|" + day + "|" + startTime);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return tasks;
+    }
+
     private List<String> parseTaskSuggestions(String response) {
         List<String> tasks = new java.util.ArrayList<>();
         try {
@@ -104,7 +159,9 @@ public class GeminiService {
                 String title = node.path("title").asText();
                 String course = node.path("course").asText("General");
                 String duration = node.path("duration").asText("1 hour");
-                tasks.add(title + "|" + course + "|" + duration);
+                int day = node.path("day").asInt(1);
+                String startTime = node.has("startTime") ? node.path("startTime").asText("09:00") : "09:00";
+                tasks.add(title + "|" + course + "|" + duration + "|" + day + "|" + startTime);
             }
         } catch (Exception e) {
             e.printStackTrace();
