@@ -87,6 +87,11 @@ class CalendarUtils {
   /// Get weekday name for a date. Dart: 1=Mon, 7=Sun.
   static String weekdayName(DateTime d) => weekdayNamesLong[d.weekday % 7];
 
-  /// ISO date string for API (yyyy-MM-dd).
-  static String toIso(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  /// User-facing date format (dd/MM/yyyy) for pickers and text fields.
+  static String formatDisplay(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+
+  /// ISO date string for API (yyyy-MM-dd). Use when sending dates to the backend.
+  static String toIso(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 }

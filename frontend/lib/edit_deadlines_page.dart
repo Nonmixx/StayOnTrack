@@ -41,13 +41,18 @@ class _EditDeadlinesPageState extends State<EditDeadlinesPage> {
             due = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
           }
         }
+        // Preserve type and difficulty from API so exams stay 'exam' and are not edited as assignments.
+        final typeStr = (d.type ?? '').trim().toLowerCase();
+        final isExam = typeStr == 'exam';
+        final difficulty = d.difficulty?.trim() ?? (isExam ? '—' : 'Medium');
         return DeadlineItem(
           id: d.id,
           title: d.title,
           courseName: d.course,
           dueDate: due,
-          difficulty: 'Medium',
-          isIndividual: true,
+          difficulty: difficulty,
+          isIndividual: d.isIndividual ?? true,
+          type: typeStr.isEmpty ? null : typeStr,
         );
       }).toList();
       deadlineStore.replaceAll(items);
@@ -193,12 +198,16 @@ class _EditDeadlinesPageState extends State<EditDeadlinesPage> {
     );
   }
 
-  /// True if this deadline was added as an exam (difficulty stored as weight %).
+  /// True if this deadline is an exam (from API type or legacy difficulty-as-weight heuristic).
   bool _isExamEntry(DeadlineItem entry) {
+    final t = (entry.type ?? '').toLowerCase();
+    if (t == 'exam') return true;
+    if (t == 'assignment') return false;
+    // Legacy: no type stored, guess by difficulty (exam weight e.g. "20%").
     if (entry.difficulty.isEmpty) return false;
     if (!entry.difficulty.endsWith('%')) return false;
-    final numStr = entry.difficulty.substring(0, entry.difficulty.length - 1);
-    return int.tryParse(numStr) != null;
+    final numStr = entry.difficulty.replaceAll(RegExp(r'[^0-9]'), '');
+    return numStr.isNotEmpty && int.tryParse(numStr) != null;
   }
 
   void _onEdit(int index) {
@@ -216,6 +225,7 @@ class _EditDeadlinesPageState extends State<EditDeadlinesPage> {
           'fromHomeAdd': true,
           'fromEditDeadlinesPage': true,
           'editDeadlineIndex': index,
+          'editDeadlineId': entry.id,
           'editDeadlineCourse': entry.courseName,
           'editDeadlineTitle': entry.title,
           'editDeadlineDueDate': entry.dueDate,
@@ -234,6 +244,7 @@ class _EditDeadlinesPageState extends State<EditDeadlinesPage> {
           'dueDate': entry.dueDate,
           'difficulty': entry.difficulty,
           'isIndividual': entry.isIndividual,
+          'editType': entry.type ?? 'assignment',
         },
       );
     }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'routes.dart';
 import 'api/semester_api.dart';
+import 'utils/calendar_utils.dart';
 
 class SemesterSetupPage extends StatefulWidget {
   const SemesterSetupPage({super.key});
@@ -15,6 +16,8 @@ class _SemesterSetupPageState extends State<SemesterSetupPage> {
   DateTime? _endDate;
   bool _isFullTime = true;
   final Set<int> _restDays = {}; // 1 = Monday, 7 = Sunday
+  /// After first save, backend returns documentId; use PUT on subsequent Next to avoid duplicates.
+  String? _savedSemesterId;
 
   static const _lightPurple = Color(0xFFB8C4E3);
   static const _darkPurple = Color(0xFF4A5568);
@@ -24,17 +27,52 @@ class _SemesterSetupPageState extends State<SemesterSetupPage> {
   static const _hintGray = Color(0xFF9CA3AF);
 
   @override
+  void initState() {
+    super.initState();
+    _loadExistingSemester();
+  }
+
+  @override
   void dispose() {
     _semesterNameController.dispose();
     super.dispose();
   }
 
+  Future<void> _loadExistingSemester() async {
+    final list = await SemesterApi.getSemesters();
+    if (!mounted || list.isEmpty) return;
+    final s = list.first;
+    setState(() {
+      _savedSemesterId = s.id;
+      if (s.semesterName != null && s.semesterName!.isNotEmpty) {
+        _semesterNameController.text = s.semesterName!;
+      }
+      if (s.startDate != null) _startDate = _parseIsoDate(s.startDate!);
+      if (s.endDate != null) _endDate = _parseIsoDate(s.endDate!);
+      if (s.studyMode != null) _isFullTime = s.studyMode == 'full-time';
+      if (s.restDays != null) {
+        _restDays.clear();
+        for (final d in s.restDays!) {
+          final i = int.tryParse(d);
+          if (i != null && i >= 1 && i <= 7) _restDays.add(i);
+        }
+      }
+    });
+  }
+
+  static DateTime? _parseIsoDate(String s) {
+    final parts = s.split('-');
+    if (parts.length != 3) return null;
+    final y = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    final d = int.tryParse(parts[2]);
+    if (y == null || m == null || d == null) return null;
+    return DateTime(y, m, d);
+  }
+
   String _formatDate(DateTime? date) {
     if (date == null) return '';
-    final m = date.month.toString().padLeft(2, '0');
-    final d = date.day.toString().padLeft(2, '0');
-    final y = date.year.toString();
-    return '$m/$d/$y';
+    return CalendarUtils.formatDisplay(date);
   }
 
   Future<void> _pickDate(BuildContext context, bool isStartDate) async {
@@ -66,14 +104,29 @@ class _SemesterSetupPageState extends State<SemesterSetupPage> {
   Future<void> _onNext(BuildContext context) async {
     if (_startDate == null || _endDate == null) return;
     final name = _semesterNameController.text.trim();
-    final created = await SemesterApi.createSemester(
-      semesterName: name.isEmpty ? 'Semester' : name,
-      startDate: _startDate!,
-      endDate: _endDate!,
-      studyMode: _isFullTime ? 'full-time' : 'part-time',
-      restDays: _restDays.isEmpty ? null : _restDays.map((d) => d.toString()).toList(),
-    );
-    if (created != null && context.mounted) {
+    final studyMode = _isFullTime ? 'full-time' : 'part-time';
+    final restDays = _restDays.isEmpty ? null : _restDays.map((d) => d.toString()).toList();
+    Semester? result;
+    if (_savedSemesterId != null && _savedSemesterId!.isNotEmpty) {
+      result = await SemesterApi.updateSemester(
+        semesterId: _savedSemesterId!,
+        semesterName: name.isEmpty ? 'Semester' : name,
+        startDate: _startDate!,
+        endDate: _endDate!,
+        studyMode: studyMode,
+        restDays: restDays,
+      );
+    } else {
+      result = await SemesterApi.createSemester(
+        semesterName: name.isEmpty ? 'Semester' : name,
+        startDate: _startDate!,
+        endDate: _endDate!,
+        studyMode: studyMode,
+        restDays: restDays,
+      );
+      if (result != null) _savedSemesterId = result.id;
+    }
+    if (result != null && context.mounted) {
       Navigator.of(context).pushNamed(AppRoutes.courseAndExamInput);
     } else if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -350,7 +403,7 @@ class _DateField extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
           child: InputDecorator(
             decoration: InputDecoration(
-              hintText: 'mm/dd/yyyy',
+              hintText: 'dd/mm/yyyy',
               hintStyle: const TextStyle(color: _hintGray),
               filled: true,
               fillColor: Colors.grey.shade50,
