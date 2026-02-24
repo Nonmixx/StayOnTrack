@@ -43,7 +43,7 @@ public class PlannerTask {
         this.duration = duration;
         this.dueDate = dueDate;
         this.scheduledStartTime = scheduledStartTime;
-        this.difficulty = difficulty != null ? difficulty : "MEDIUM";
+        this.difficulty = difficulty;  // null for exams; only set for assignments when user chose
         this.isIndividual = isIndividual;
         this.status = "ON_TRACK";
         this.completed = false;

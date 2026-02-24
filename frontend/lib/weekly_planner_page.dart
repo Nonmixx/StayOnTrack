@@ -267,9 +267,11 @@ class _DailyTaskCardChips {
   static Widget difficultyChip(String difficulty) {
     Color bg;
     Color textColor;
+    String label = difficulty;
     if (difficulty.endsWith('%')) {
       bg = const Color(0xFFF3E8F4);
       textColor = const Color(0xFF8B5A9B);
+      label = 'Weight $difficulty';
     } else {
       switch (difficulty) {
         case 'Easy':
@@ -293,7 +295,7 @@ class _DailyTaskCardChips {
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
-        difficulty,
+        label,
         style: TextStyle(
           fontFamily: 'Arimo',
           fontSize: 11,

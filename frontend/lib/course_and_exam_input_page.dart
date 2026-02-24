@@ -97,6 +97,14 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
   Future<void> _addExam() async {
     final course = _courseNameController.text.trim();
     if (course.isEmpty) return;
+    if (_examDate == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please select an exam date.')),
+        );
+      }
+      return;
+    }
     final entry = _ExamEntry(
       courseName: course,
       examType: _effectiveExamType,
@@ -109,8 +117,7 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
         course: course,
         dueDate: entry.date,
         type: 'exam',
-        difficulty: entry.weight != null ? '${entry.weight}%' : null,
-        isIndividual: true,
+        difficulty: entry.weight != null && entry.weight! > 0 ? '${entry.weight}%' : null,
       );
       if (created != null) {
         deadlineStore.add(DeadlineItem(

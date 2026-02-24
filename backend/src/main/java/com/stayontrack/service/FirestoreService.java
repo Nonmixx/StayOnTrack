@@ -661,7 +661,7 @@ public class FirestoreService {
         t.setCompleted(Boolean.TRUE.equals(doc.getBoolean("completed")));
         t.setDifficulty(doc.getString("difficulty"));
         Boolean ind = doc.getBoolean("isIndividual");
-        t.setIsIndividual(ind != null ? ind : Boolean.TRUE);
+        t.setIsIndividual(ind);  // null for exams (no Individual/Group); only set when stored
         t.setStatus(doc.getString("status"));
         Timestamp ts = doc.getTimestamp("dueDate");
         if (ts != null) {

@@ -136,6 +136,8 @@ class _FocusAndEnergyProfilePageState extends State<FocusAndEnergyProfilePage> {
           typicalStudyDuration: _typicalStudyDuration,
         );
       }
+      // Small delay to ensure Firestore has persisted the focus profile before plan generation reads it
+      await Future.delayed(const Duration(milliseconds: 500));
       final plan = await PlannerApi.generatePlan(availableHours: 20);
       if (context.mounted) Navigator.of(context).pop();
       if (context.mounted) {

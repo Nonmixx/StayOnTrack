@@ -76,7 +76,7 @@ public class PlannerEngineService {
 
         LocalDate weekStart = planStart;
         List<PlannerWeek> created = new ArrayList<>();
-        int maxWeeks = 24;
+        int maxWeeks = 6;  // Limit to 6 weeks to avoid timeout; ensures setup tasks are included
         int weekCount = 0;
         while (!weekStart.isAfter(planEnd) && weekCount < maxWeeks) {
             PlannerWeek existing = firestoreService.getPlannerWeekByDate(userId, weekStart);
@@ -248,8 +248,17 @@ public class PlannerEngineService {
                         seen.add(dedupKey);
                         LocalDateTime scheduledStart = taskDate.atTime(Math.min(23, Math.max(0, hour)), Math.min(59, Math.max(0, min)));
                         Deadline match = findMatchingDeadline(parts[0], parts[1], relevantDeadlines);
-                        String diff = match != null && match.getDifficulty() != null ? match.getDifficulty() : "MEDIUM";
-                        Boolean ind = match != null && match.getIsIndividual() != null ? match.getIsIndividual() : Boolean.TRUE;
+                        String diff = null;
+                        Boolean ind = null;
+                        if (match != null) {
+                            if (isExamDeadline(match)) {
+                                String dDiff = match.getDifficulty();
+                                if (dDiff != null && dDiff.contains("%")) diff = dDiff;  // exam weight
+                            } else {
+                                diff = match.getDifficulty();
+                                ind = match.getIsIndividual();
+                            }
+                        }
                         PlannerTask task = new PlannerTask(week.getId(), week.getUserId(),
                                 parts[0], parts[1], parts[2], taskDate, scheduledStart, diff, ind);
                         tasks.add(task);
@@ -257,9 +266,11 @@ public class PlannerEngineService {
                 }
             }
             fixOverlappingSessions(tasks);
-            insertBreaksBetweenSessions(tasks, typicalDuration);
             ensureAllDeadlinesRepresented(tasks, relevantDeadlines, week, today);
-            insertBreaksBetweenSessions(tasks, typicalDuration);  // re-apply after ensureAllDeadlinesRepresented adds tasks
+            spreadTasksAcrossDays(tasks, week, today, restDays);
+            moveTasksOutOfLowEnergyTimes(tasks, peakFocus, lowEnergy, week, today);
+            insertBreaksBetweenSessions(tasks, typicalDuration);
+            fixOverlappingSessions(tasks);
         }
 
         if (tasks.isEmpty() && !deadlines.isEmpty()) {
@@ -292,16 +303,133 @@ public class PlannerEngineService {
                 if (seen.contains(dedupKey)) { dayIndex++; continue; }
                 seen.add(dedupKey);
                 LocalDateTime scheduledStart = taskDate.atTime(9, 0);
-                String diff = d.getDifficulty() != null ? d.getDifficulty() : "MEDIUM";
-                Boolean ind = d.getIsIndividual() != null ? d.getIsIndividual() : Boolean.TRUE;
+                String diff;
+                Boolean ind;
+                if (isExamDeadline(d)) {
+                    String dDiff = d.getDifficulty();
+                    diff = (dDiff != null && dDiff.contains("%")) ? dDiff : null;  // exam weight
+                    ind = null;
+                } else {
+                    diff = d.getDifficulty();
+                    ind = d.getIsIndividual();
+                }
                 PlannerTask task = new PlannerTask(week.getId(), week.getUserId(), taskTitle, d.getCourse(), duration, taskDate, scheduledStart, diff, ind);
                 tasks.add(task);
                 dayIndex += (hours / Math.max(1, hoursPerDay)) + 1;
             }
+            spreadTasksAcrossDays(tasks, week, LocalDate.now(), restDays);
+            moveTasksOutOfLowEnergyTimes(tasks, peakFocus, lowEnergy, week, LocalDate.now());
         }
 
         // Do NOT add generic tasks - only tasks from user-added deadlines
         return tasks;
+    }
+
+    /**
+     * Spread tasks across available days so we use as many days as reasonable.
+     * - No day has more than 3 sessions
+     * - When we have many available days (e.g. Mon-Fri), use more of them instead of clustering on 1-2 days
+     */
+    private void spreadTasksAcrossDays(List<PlannerTask> tasks, PlannerWeek week, LocalDate today, List<String> restDays) {
+        if (tasks.isEmpty()) return;
+        LocalDate weekStart = week.getWeekStartDate();
+        LocalDate weekEnd = week.getWeekEndDate();
+        List<LocalDate> availableDays = new ArrayList<>();
+        for (LocalDate d = weekStart; !d.isAfter(weekEnd); d = d.plusDays(1)) {
+            if (d.isBefore(today)) continue;
+            if (restDays != null) {
+                String dayName = DAY_NAMES[d.getDayOfWeek().getValue() - 1];
+                if (restDays.contains(dayName)) continue;
+            }
+            availableDays.add(d);
+        }
+        if (availableDays.isEmpty()) return;
+        Map<LocalDate, List<PlannerTask>> byDate = new LinkedHashMap<>();
+        for (PlannerTask t : tasks) {
+            LocalDate d = t.getDueDate();
+            if (d != null) byDate.computeIfAbsent(d, k -> new ArrayList<>()).add(t);
+        }
+        int maxPerDay = 3;
+        int totalTasks = tasks.size();
+        int targetDaysUsed = Math.min(availableDays.size(), Math.max(2, (totalTasks + 1) / 2));
+        int targetPerDay = Math.max(1, totalTasks / targetDaysUsed);
+        for (LocalDate day : new ArrayList<>(byDate.keySet())) {
+            List<PlannerTask> dayTasks = byDate.get(day);
+            while (dayTasks.size() > maxPerDay || (dayTasks.size() > targetPerDay && hasUnderusedDays(byDate, availableDays, targetPerDay))) {
+                PlannerTask move = dayTasks.remove(dayTasks.size() - 1);
+                LocalDate targetDay = findBestDayToMoveTo(byDate, availableDays, day, maxPerDay, targetPerDay);
+                if (targetDay == null) break;
+                move.setDueDate(targetDay);
+                int hour = 9 + (byDate.getOrDefault(targetDay, List.of()).size() * 2);
+                move.setScheduledStartTime(targetDay.atTime(Math.min(20, hour), 0));
+                byDate.computeIfAbsent(targetDay, k -> new ArrayList<>()).add(move);
+            }
+        }
+    }
+
+    private boolean hasUnderusedDays(Map<LocalDate, List<PlannerTask>> byDate, List<LocalDate> availableDays, int targetPerDay) {
+        long underused = availableDays.stream()
+                .filter(d -> byDate.getOrDefault(d, List.of()).size() < targetPerDay)
+                .count();
+        return underused > 0;
+    }
+
+    private LocalDate findBestDayToMoveTo(Map<LocalDate, List<PlannerTask>> byDate, List<LocalDate> availableDays,
+            LocalDate excludeDay, int maxPerDay, int targetPerDay) {
+        for (LocalDate d : availableDays) {
+            if (d.equals(excludeDay)) continue;
+            int count = byDate.getOrDefault(d, List.of()).size();
+            if (count < maxPerDay && count < targetPerDay) return d;
+        }
+        for (LocalDate d : availableDays) {
+            if (d.equals(excludeDay)) continue;
+            int count = byDate.getOrDefault(d, List.of()).size();
+            if (count < maxPerDay) return d;
+        }
+        return null;
+    }
+
+    /**
+     * Move tasks scheduled during low energy times to peak focus times.
+     * Uses the same label format as focus profile: "Morning (9am-12pm)", etc.
+     */
+    private void moveTasksOutOfLowEnergyTimes(List<PlannerTask> tasks, List<String> peakFocus, List<String> lowEnergy,
+            PlannerWeek week, LocalDate today) {
+        if (tasks.isEmpty() || lowEnergy == null || lowEnergy.isEmpty()) return;
+        Set<Integer> lowEnergyHours = parseTimeLabelsToHours(lowEnergy);
+        Set<Integer> targetHours = (peakFocus != null && !peakFocus.isEmpty())
+                ? parseTimeLabelsToHours(peakFocus)
+                : Set.of(9, 10, 11, 14, 15, 16, 17, 18, 19, 20);  // default: avoid common low-energy slots
+        targetHours = targetHours.stream().filter(h -> !lowEnergyHours.contains(h)).collect(java.util.stream.Collectors.toSet());
+        if (targetHours.isEmpty()) return;
+        for (PlannerTask t : tasks) {
+            LocalDateTime start = t.getScheduledStartTime();
+            if (start == null) continue;
+            int hour = start.getHour();
+            if (lowEnergyHours.contains(hour)) {
+                Integer targetHour = targetHours.stream()
+                        .min(Integer::compareTo)
+                        .orElse(null);
+                if (targetHour != null) {
+                    t.setScheduledStartTime(t.getDueDate().atTime(targetHour, 0));
+                }
+            }
+        }
+    }
+
+    /** Parse focus profile labels like "Morning (9am-12pm)" to set of hours (e.g. 9,10,11). */
+    private Set<Integer> parseTimeLabelsToHours(List<String> labels) {
+        Set<Integer> hours = new java.util.HashSet<>();
+        for (String label : labels) {
+            if (label == null) continue;
+            if (label.contains("6am") && label.contains("9am")) { for (int h = 6; h < 9; h++) hours.add(h); }
+            else if (label.contains("9am") && label.contains("12pm")) { for (int h = 9; h < 12; h++) hours.add(h); }
+            else if (label.contains("12pm") && label.contains("5pm")) { for (int h = 12; h < 17; h++) hours.add(h); }
+            else if (label.contains("5pm") && label.contains("9pm")) { for (int h = 17; h < 21; h++) hours.add(h); }
+            else if (label.contains("9pm") && label.contains("1am")) { for (int h = 21; h < 24; h++) hours.add(h); hours.add(0); }
+            else if (label.contains("1am") && label.contains("6am")) { for (int h = 1; h < 6; h++) hours.add(h); }
+        }
+        return hours;
     }
 
     private String buildTaskTitle(Deadline d) {
@@ -310,6 +438,11 @@ public class PlannerEngineService {
             return "Prepare for " + d.getTitle();
         }
         return "Work on " + d.getTitle();
+    }
+
+    private boolean isExamDeadline(Deadline d) {
+        String type = d.getType() != null ? d.getType().toLowerCase() : "";
+        return type.contains("exam") || type.contains("midterm") || type.contains("final") || type.contains("quiz");
     }
 
     /** Find deadline that matches task title and course (for difficulty/isIndividual lookup). */
@@ -438,8 +571,16 @@ public class PlannerEngineService {
             if (taskDate.isBefore(today)) { nextDay++; continue; }
             if (taskDate.isAfter(weekEnd)) continue;
             LocalDateTime scheduledStart = taskDate.atTime(Math.min(22, nextHour), 0);
-            String diff = d.getDifficulty() != null ? d.getDifficulty() : "MEDIUM";
-            Boolean ind = d.getIsIndividual() != null ? d.getIsIndividual() : Boolean.TRUE;
+            String diff;
+            Boolean ind;
+            if (isExamDeadline(d)) {
+                String dDiff = d.getDifficulty();
+                diff = (dDiff != null && dDiff.contains("%")) ? dDiff : null;
+                ind = null;
+            } else {
+                diff = d.getDifficulty();
+                ind = d.getIsIndividual();
+            }
             PlannerTask task = new PlannerTask(week.getId(), week.getUserId(), taskTitle, d.getCourse(), duration, taskDate, scheduledStart, diff, ind);
             tasks.add(task);
             nextHour += 2;
