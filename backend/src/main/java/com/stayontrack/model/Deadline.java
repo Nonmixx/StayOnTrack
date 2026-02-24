@@ -12,6 +12,8 @@ public class Deadline {
     private String course;
     private LocalDate dueDate;
     private String type; // e.g., "assignment", "exam", "lab"
+    private String difficulty; // e.g., "Easy", "Medium", "Hard", or "20%" for exam weight
+    private Boolean isIndividual; // true = individual, false = group
     private LocalDateTime createdAt;
     private String userId;
 
@@ -40,6 +42,12 @@ public class Deadline {
 
     public String getType() { return type; }
     public void setType(String type) { this.type = type; }
+
+    public String getDifficulty() { return difficulty; }
+    public void setDifficulty(String difficulty) { this.difficulty = difficulty; }
+
+    public Boolean getIsIndividual() { return isIndividual; }
+    public void setIsIndividual(Boolean isIndividual) { this.isIndividual = isIndividual; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

@@ -91,6 +91,8 @@ class _AssignmentAndProjectPageState extends State<AssignmentAndProjectPage> {
         course: course,
         dueDate: _deadline,
         type: 'assignment',
+        difficulty: _selectedDifficulty ?? 'Medium',
+        isIndividual: _isIndividual,
       );
       if (created != null) {
         deadlineStore.add(DeadlineItem(

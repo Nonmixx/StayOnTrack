@@ -263,6 +263,48 @@ class _WeeklyPlannerPageState extends State<WeeklyPlannerPage> {
   }
 }
 
+class _DailyTaskCardChips {
+  static Widget difficultyChip(String difficulty) {
+    Color bg;
+    Color textColor;
+    if (difficulty.endsWith('%')) {
+      bg = const Color(0xFFF3E8F4);
+      textColor = const Color(0xFF8B5A9B);
+    } else {
+      switch (difficulty) {
+        case 'Easy':
+          bg = const Color(0xFFE8F4EC);
+          textColor = const Color(0xFF4A9B6E);
+          break;
+        case 'Hard':
+          bg = const Color(0xFFFEF2F2);
+          textColor = const Color(0xFFC10007);
+          break;
+        default:
+          bg = const Color(0xFFFEF9E8);
+          textColor = const Color(0xFFB8860B);
+          break;
+      }
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        difficulty,
+        style: TextStyle(
+          fontFamily: 'Arimo',
+          fontSize: 11,
+          fontWeight: FontWeight.w500,
+          color: textColor,
+        ),
+      ),
+    );
+  }
+}
+
 class DailyTaskCard extends StatelessWidget {
   final String day;
   final String date;
@@ -420,6 +462,34 @@ class DailyTaskCard extends StatelessWidget {
                                   ),
                                 ],
                               ),
+                              if ((t.difficulty != null && t.difficulty!.isNotEmpty) || t.isIndividual != null) ...[
+                                const SizedBox(height: 6),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 4,
+                                  children: [
+                                    if (t.difficulty != null && t.difficulty!.isNotEmpty)
+                                      _DailyTaskCardChips.difficultyChip(t.difficulty!),
+                                    if (t.isIndividual != null)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: (t.isIndividual == true ? const Color(0xFFE8ECF4) : const Color(0xFFE8F4EC)),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          t.isIndividual == true ? 'Individual' : 'Group',
+                                          style: TextStyle(
+                                            fontFamily: 'Arimo',
+                                            fontSize: 11,
+                                            color: t.isIndividual == true ? const Color(0xFF7E93CC) : const Color(0xFF4A9B6E),
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ],
                             ],
                           ),
                         ),

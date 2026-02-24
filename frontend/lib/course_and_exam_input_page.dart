@@ -109,6 +109,8 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
         course: course,
         dueDate: entry.date,
         type: 'exam',
+        difficulty: entry.weight != null ? '${entry.weight}%' : null,
+        isIndividual: true,
       );
       if (created != null) {
         deadlineStore.add(DeadlineItem(

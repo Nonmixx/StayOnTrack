@@ -99,6 +99,8 @@ class _AddDeadlinePageState extends State<AddDeadlinePage> {
         course: course,
         dueDate: _dueDate,
         type: 'assignment',
+        difficulty: _selectedDifficulty,
+        isIndividual: _isIndividual,
       );
       if (updated != null && mounted) {
         final item = DeadlineItem(
@@ -138,6 +140,8 @@ class _AddDeadlinePageState extends State<AddDeadlinePage> {
       course: course,
       dueDate: _dueDate,
       type: 'assignment',
+      difficulty: _selectedDifficulty,
+      isIndividual: _isIndividual,
     );
     if (created != null && mounted) {
       final item = DeadlineItem(
@@ -183,7 +187,7 @@ class _AddDeadlinePageState extends State<AddDeadlinePage> {
                   Navigator.of(context).pop(); // leave Add Deadline page
                   Navigator.of(context).pop(); // leave Edit Deadline/Exam page → home
                 } else {
-                  Navigator.of(context).pop(); // leave Add Deadline page → home
+                  Navigator.of(context).pop(true); // leave Add Deadline page → home, signal refresh
                 }
               },
               child: const Text('OK'),
@@ -191,7 +195,7 @@ class _AddDeadlinePageState extends State<AddDeadlinePage> {
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop(); // close dialog
-                Navigator.of(context).pop(); // leave Add Deadline page
+                Navigator.of(context).pop(true); // leave Add Deadline page, signal refresh
                 if (!fromEditDeadlinesPage) {
                   Navigator.of(context).pushNamed(AppRoutes.editDeadlines);
                 }

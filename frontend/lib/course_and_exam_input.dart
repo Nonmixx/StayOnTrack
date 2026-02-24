@@ -155,6 +155,8 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
         course: course,
         dueDate: entry.date,
         type: 'exam',
+        difficulty: entry.weight != null ? '${entry.weight}%' : null,
+        isIndividual: true,
       );
       if (created != null) {
         deadlineStore.add(DeadlineItem(
@@ -193,7 +195,7 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
           TextButton(
             onPressed: () {
               Navigator.of(context).pop(); // close dialog
-              Navigator.of(context).pop(); // leave Exam page
+              Navigator.of(context).pop(true); // leave Exam page, signal refresh
               if (fromEditDeadlinesPage) {
                 Navigator.of(context).pop(); // leave Edit Deadline/Exam page → home
               }
@@ -204,7 +206,7 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
           TextButton(
             onPressed: () {
               Navigator.of(context).pop(); // close dialog
-              Navigator.of(context).pop(); // leave Exam page
+              Navigator.of(context).pop(true); // leave Exam page, signal refresh
               if (!fromEditDeadlinesPage) {
                 Navigator.of(context).pushNamed(AppRoutes.editDeadlines);
               }

@@ -125,6 +125,8 @@ class PlannerApi {
     required String course,
     required DateTime? dueDate,
     String type = 'assignment',
+    String? difficulty,
+    bool? isIndividual,
   }) async {
     try {
       final body = jsonEncode({
@@ -134,6 +136,8 @@ class PlannerApi {
             ? '${dueDate.year}-${dueDate.month.toString().padLeft(2, '0')}-${dueDate.day.toString().padLeft(2, '0')}'
             : null,
         'type': type,
+        if (difficulty != null) 'difficulty': difficulty,
+        if (isIndividual != null) 'isIndividual': isIndividual,
       });
       final res = await http.post(
         Uri.parse('$baseUrl/api/deadlines?userId=$_userId'),
@@ -154,6 +158,8 @@ class PlannerApi {
     required String course,
     required DateTime? dueDate,
     String type = 'assignment',
+    String? difficulty,
+    bool? isIndividual,
   }) async {
     try {
       final body = jsonEncode({
@@ -163,6 +169,8 @@ class PlannerApi {
             ? '${dueDate.year}-${dueDate.month.toString().padLeft(2, '0')}-${dueDate.day.toString().padLeft(2, '0')}'
             : null,
         'type': type,
+        if (difficulty != null) 'difficulty': difficulty,
+        if (isIndividual != null) 'isIndividual': isIndividual,
       });
       final res = await http.put(
         Uri.parse('$baseUrl/api/deadlines/$id?userId=$_userId'),
@@ -222,6 +230,7 @@ class PlannerTask {
   final String? dueDate;
   final DateTime? scheduledStartTime;
   final String? difficulty;
+  final bool? isIndividual; // true = individual, false = group
   final String? status;
 
   PlannerTask({
@@ -233,6 +242,7 @@ class PlannerTask {
     this.dueDate,
     this.scheduledStartTime,
     this.difficulty,
+    this.isIndividual,
     this.status,
   });
 
@@ -264,6 +274,7 @@ class PlannerTask {
       dueDate: dueDateStr,
       scheduledStartTime: scheduledStart,
       difficulty: json['difficulty'] as String?,
+      isIndividual: json['isIndividual'] as bool?,
       status: json['status'] as String?,
     );
   }

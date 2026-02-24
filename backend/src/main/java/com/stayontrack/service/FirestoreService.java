@@ -140,6 +140,8 @@ public class FirestoreService {
         if (deadline.getTitle() != null) updates.put("title", deadline.getTitle());
         if (deadline.getCourse() != null) updates.put("course", deadline.getCourse());
         if (deadline.getType() != null) updates.put("type", deadline.getType());
+        if (deadline.getDifficulty() != null) updates.put("difficulty", deadline.getDifficulty());
+        if (deadline.getIsIndividual() != null) updates.put("isIndividual", deadline.getIsIndividual());
         if (deadline.getDueDate() != null) {
             updates.put("dueDate", Timestamp.of(java.sql.Timestamp.from(
                     deadline.getDueDate().atStartOfDay(ZoneId.systemDefault()).toInstant())));
@@ -518,6 +520,8 @@ public class FirestoreService {
         map.put("course", d.getCourse());
         map.put("type", d.getType());
         map.put("userId", d.getUserId());
+        if (d.getDifficulty() != null) map.put("difficulty", d.getDifficulty());
+        if (d.getIsIndividual() != null) map.put("isIndividual", d.getIsIndividual());
         if (d.getDueDate() != null) {
             map.put("dueDate", Timestamp.of(java.sql.Timestamp.from(
                     d.getDueDate().atStartOfDay(ZoneId.systemDefault()).toInstant())));
@@ -537,6 +541,9 @@ public class FirestoreService {
         d.setCourse(doc.getString("course"));
         d.setType(doc.getString("type"));
         d.setUserId(doc.getString("userId"));
+        d.setDifficulty(doc.getString("difficulty"));
+        Boolean ind = doc.getBoolean("isIndividual");
+        d.setIsIndividual(ind != null ? ind : Boolean.TRUE);
         Timestamp ts = doc.getTimestamp("dueDate");
         if (ts != null) {
             d.setDueDate(LocalDateTime.ofInstant(ts.toDate().toInstant(), ZoneId.systemDefault()).toLocalDate());
@@ -625,6 +632,7 @@ public class FirestoreService {
         map.put("duration", t.getDuration());
         map.put("completed", t.isCompleted());
         map.put("difficulty", t.getDifficulty());
+        if (t.getIsIndividual() != null) map.put("isIndividual", t.getIsIndividual());
         map.put("status", t.getStatus());
         if (t.getDueDate() != null) {
             map.put("dueDate", Timestamp.of(java.sql.Timestamp.from(
@@ -652,6 +660,8 @@ public class FirestoreService {
         t.setDuration(doc.getString("duration"));
         t.setCompleted(Boolean.TRUE.equals(doc.getBoolean("completed")));
         t.setDifficulty(doc.getString("difficulty"));
+        Boolean ind = doc.getBoolean("isIndividual");
+        t.setIsIndividual(ind != null ? ind : Boolean.TRUE);
         t.setStatus(doc.getString("status"));
         Timestamp ts = doc.getTimestamp("dueDate");
         if (ts != null) {
