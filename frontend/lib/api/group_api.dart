@@ -178,10 +178,15 @@ class GroupApi {
         headers: {'Content-Type': 'application/json'},
         body: body,
       );
-      if (res.statusCode != 200 && res.statusCode != 201) return null;
+      if (res.statusCode != 200 && res.statusCode != 201) {
+        print('❌ createGroupAssignment HTTP ${res.statusCode}: ${res.body}');
+        return null;
+      }
       final data = jsonDecode(res.body) as Map<String, dynamic>;
       return data['assignmentId'] as String?;
-    } catch (_) {
+    } catch (e, stack) {
+      print('❌ createGroupAssignment error: $e');
+      print('❌ Stack: $stack');
       return null;
     }
   }

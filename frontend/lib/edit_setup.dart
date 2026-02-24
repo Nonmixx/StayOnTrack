@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'dart:html' as html;
 
 /// Page 6.5 - Edit Setup
+/// Same structure as AssignmentSetupPage but with pre-filled data
 class EditSetupPage extends StatefulWidget {
   const EditSetupPage({Key? key}) : super(key: key);
 
@@ -23,9 +23,6 @@ class _EditSetupPageState extends State<EditSetupPage> {
   );
 
   DateTime? _selectedDeadline = DateTime(2023, 11, 15, 23, 59);
-  String? _uploadedFileName;
-  bool _isAddMemberHovered = false;
-  String _assignmentId = '';
 
   List<Map<String, dynamic>> _members = [
     {
@@ -50,29 +47,6 @@ class _EditSetupPageState extends State<EditSetupPage> {
     'Presentation',
     'Testing',
   ];
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final args =
-        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-    final id = args?['assignmentId'] as String? ?? '';
-    if (id.isNotEmpty && _assignmentId != id) _assignmentId = id;
-  }
-
-  Future<void> _pickFile() async {
-    final uploadInput = html.FileUploadInputElement();
-    uploadInput.accept = '.pdf,.doc,.docx';
-    uploadInput.click();
-    uploadInput.onChange.listen((event) {
-      final files = uploadInput.files;
-      if (files != null && files.isNotEmpty) {
-        setState(() {
-          _uploadedFileName = files.first.name;
-        });
-      }
-    });
-  }
 
   BoxDecoration get _inputBoxDecoration => BoxDecoration(
     color: const Color(0xFFFFFFFF),
@@ -137,9 +111,8 @@ class _EditSetupPageState extends State<EditSetupPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFFFF8F0),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFFFFFFF),
-        elevation: 1,
-        shadowColor: Colors.black.withOpacity(0.1),
+        backgroundColor: Colors.white,
+        elevation: 0,
         leading: IconButton(
           icon: const Icon(
             Icons.arrow_back,
@@ -207,6 +180,7 @@ class _EditSetupPageState extends State<EditSetupPage> {
     );
   }
 
+  // ── SECTION A: Group Members ──
   Widget _buildGroupMembersSection() {
     return Container(
       decoration: _cardDecoration,
@@ -227,6 +201,7 @@ class _EditSetupPageState extends State<EditSetupPage> {
           const Divider(color: Color(0xFFE7E6EB), thickness: 1, height: 1),
           const SizedBox(height: 16),
 
+          // Group Name card
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
@@ -284,64 +259,36 @@ class _EditSetupPageState extends State<EditSetupPage> {
 
           const SizedBox(height: 4),
 
-          // ── CHANGED: dashed border stays, color changes on hover ──
-          MouseRegion(
-            onEnter: (_) => setState(() => _isAddMemberHovered = true),
-            onExit: (_) => setState(() => _isAddMemberHovered = false),
-            cursor: SystemMouseCursors.click,
-            child: GestureDetector(
-              onTap: () {
-                setState(() {
-                  _members.add({
-                    'name': TextEditingController(),
-                    'strengths': <String>[],
-                  });
+          // Add Member — dashed border
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                _members.add({
+                  'name': TextEditingController(),
+                  'strengths': <String>[],
                 });
-              },
-              child: CustomPaint(
-                painter: _DashedBorderPainter(
-                  color: _isAddMemberHovered
-                      ? const Color(0xFFAFBCDD)
-                      : const Color(0xFF99A1AF),
-                  borderRadius: 10,
-                  dashWidth: 6,
-                  dashSpace: 4,
-                  strokeWidth: _isAddMemberHovered ? 1.8 : 1.5,
+              });
+            },
+            child: CustomPaint(
+              painter: _DashedBorderPainter(
+                color: const Color(0xFF99A1AF),
+                borderRadius: 10,
+              ),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFFFFF),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  decoration: BoxDecoration(
-                    color: _isAddMemberHovered
-                        ? const Color(0xFFEFF3FB)
-                        : const Color(0xFFFFFFFF),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Center(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.add,
-                          size: 16,
-                          color: _isAddMemberHovered
-                              ? const Color(0xFFAFBCDD)
-                              : const Color(0xFF99A1AF),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Add member',
-                          style: TextStyle(
-                            fontFamily: 'Arimo',
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: _isAddMemberHovered
-                                ? const Color(0xFFAFBCDD)
-                                : const Color(0xFF99A1AF),
-                          ),
-                        ),
-                      ],
+                child: const Center(
+                  child: Text(
+                    '+ Add member',
+                    style: TextStyle(
+                      fontFamily: 'Arimo',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF99A1AF),
                     ),
                   ),
                 ),
@@ -353,6 +300,7 @@ class _EditSetupPageState extends State<EditSetupPage> {
     );
   }
 
+  // Individual Member Card
   Widget _buildMemberCard(int index, Map<String, dynamic> member) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -401,6 +349,7 @@ class _EditSetupPageState extends State<EditSetupPage> {
             ],
           ),
           const SizedBox(height: 12),
+
           Container(
             decoration: _inputBoxDecoration,
             child: TextField(
@@ -414,6 +363,7 @@ class _EditSetupPageState extends State<EditSetupPage> {
             ),
           ),
           const SizedBox(height: 12),
+
           const Text(
             'Strengths',
             style: TextStyle(
@@ -424,6 +374,7 @@ class _EditSetupPageState extends State<EditSetupPage> {
             ),
           ),
           const SizedBox(height: 8),
+
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -489,6 +440,7 @@ class _EditSetupPageState extends State<EditSetupPage> {
     );
   }
 
+  // ── SECTION B: Assignment Details ──
   Widget _buildAssignmentDetailsSection() {
     return Container(
       decoration: _cardDecoration,
@@ -508,18 +460,21 @@ class _EditSetupPageState extends State<EditSetupPage> {
           const SizedBox(height: 10),
           const Divider(color: Color(0xFFE7E6EB), thickness: 1, height: 1),
           const SizedBox(height: 16),
+
           _buildLabeledField(
             label: 'Course Name',
             controller: _courseNameController,
             hint: 'e.g. CS101',
           ),
           const SizedBox(height: 16),
+
           _buildLabeledField(
             label: 'Assignment Title',
             controller: _assignmentTitleController,
             hint: 'e.g. Final Group Project',
           ),
           const SizedBox(height: 16),
+
           const Text(
             'Deadline',
             style: TextStyle(
@@ -625,6 +580,7 @@ class _EditSetupPageState extends State<EditSetupPage> {
     return '$day/$month/$year  ${hour12.toString().padLeft(2, '0')}:$minute $ampm';
   }
 
+  // ── SECTION C: Assignment Questions/Brief ──
   Widget _buildAssignmentBriefSection() {
     return Container(
       decoration: _cardDecoration,
@@ -644,6 +600,8 @@ class _EditSetupPageState extends State<EditSetupPage> {
           const SizedBox(height: 10),
           const Divider(color: Color(0xFFE7E6EB), thickness: 1, height: 1),
           const SizedBox(height: 16),
+
+          // Brief textarea — F5F5F5, shadow
           Container(
             decoration: BoxDecoration(
               color: const Color(0xFFF5F5F5),
@@ -699,6 +657,8 @@ class _EditSetupPageState extends State<EditSetupPage> {
             ),
           ),
           const SizedBox(height: 16),
+
+          // OR divider
           Row(
             children: const [
               Expanded(child: Divider(color: Color(0xFFE7E6EB), thickness: 1)),
@@ -718,8 +678,10 @@ class _EditSetupPageState extends State<EditSetupPage> {
             ],
           ),
           const SizedBox(height: 16),
+
+          // Upload — dashed AFBCDD, F5F5F5 fill, no shadow
           GestureDetector(
-            onTap: _pickFile,
+            onTap: () {},
             child: CustomPaint(
               painter: _DashedBorderPainter(
                 color: const Color(0xFFAFBCDD),
@@ -734,24 +696,18 @@ class _EditSetupPageState extends State<EditSetupPage> {
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
+                  children: const [
                     Icon(
-                      _uploadedFileName != null
-                          ? Icons.check_circle_outline
-                          : Icons.upload_file_outlined,
-                      color: _uploadedFileName != null
-                          ? const Color(0xFF008236)
-                          : const Color(0xFF909EC3),
+                      Icons.upload_file_outlined,
+                      color: Color(0xFF909EC3),
                       size: 32,
                     ),
-                    const SizedBox(height: 8),
+                    SizedBox(height: 8),
                     Text(
-                      _uploadedFileName ?? 'Upload PDF / DOC',
+                      'Upload PDF / DOC',
                       style: TextStyle(
                         fontFamily: 'Arimo',
-                        color: _uploadedFileName != null
-                            ? const Color(0xFF008236)
-                            : const Color(0xFF909EC3),
+                        color: Color(0xFF909EC3),
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
                       ),
@@ -762,6 +718,8 @@ class _EditSetupPageState extends State<EditSetupPage> {
             ),
           ),
           const SizedBox(height: 12),
+
+          // AI note
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -795,6 +753,7 @@ class _EditSetupPageState extends State<EditSetupPage> {
     );
   }
 
+  // ── SECTION D: Generate Button ──
   Widget _buildGenerateButton() {
     return Container(
       decoration: BoxDecoration(
@@ -813,11 +772,7 @@ class _EditSetupPageState extends State<EditSetupPage> {
         ],
       ),
       child: ElevatedButton(
-        onPressed: () => Navigator.pushNamed(
-          context,
-          '/task-distribution',
-          arguments: {'assignmentId': _assignmentId},
-        ),
+        onPressed: () => Navigator.pushNamed(context, '/task-distribution'),
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF9C9EC3),
           foregroundColor: const Color(0xFFFFFFFF),
@@ -886,6 +841,7 @@ class _EditSetupPageState extends State<EditSetupPage> {
   }
 }
 
+/// Custom painter for dashed border
 class _DashedBorderPainter extends CustomPainter {
   final Color color;
   final double borderRadius;
@@ -907,18 +863,22 @@ class _DashedBorderPainter extends CustomPainter {
       ..color = color
       ..strokeWidth = strokeWidth
       ..style = PaintingStyle.stroke;
+
     final RRect rrect = RRect.fromRectAndRadius(
       Rect.fromLTWH(0, 0, size.width, size.height),
       Radius.circular(borderRadius),
     );
+
     final Path path = Path()..addRRect(rrect);
+
     for (final metric in path.computeMetrics()) {
       double distance = 0.0;
       bool draw = true;
       while (distance < metric.length) {
         final double len = draw ? dashWidth : dashSpace;
-        if (draw)
+        if (draw) {
           canvas.drawPath(metric.extractPath(distance, distance + len), paint);
+        }
         distance += len;
         draw = !draw;
       }
@@ -929,6 +889,5 @@ class _DashedBorderPainter extends CustomPainter {
   bool shouldRepaint(_DashedBorderPainter oldDelegate) =>
       oldDelegate.color != color ||
       oldDelegate.dashWidth != dashWidth ||
-      oldDelegate.dashSpace != dashSpace ||
-      oldDelegate.strokeWidth != strokeWidth;
+      oldDelegate.dashSpace != dashSpace;
 }
