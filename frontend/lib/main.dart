@@ -58,6 +58,7 @@ class MyApp extends StatelessWidget {
             initialDueDate: a['dueDate'] as DateTime?,
             initialDifficulty: a['difficulty'] as String?,
             initialIsIndividual: a['isIndividual'] as bool?,
+            initialType: a['editType'] as String?,
           );
         },
         AppRoutes.editDeadlines: (context) => const EditDeadlinesPage(),

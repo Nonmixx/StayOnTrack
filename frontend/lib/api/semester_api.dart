@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'planner_api.dart' show baseUrl;
+import '../utils/calendar_utils.dart';
 
 class SemesterApi {
   static String _userId = 'default-user';
@@ -18,13 +19,42 @@ class SemesterApi {
     try {
       final body = jsonEncode({
         'semesterName': semesterName,
-        'startDate': '${startDate.year}-${startDate.month.toString().padLeft(2, '0')}-${startDate.day.toString().padLeft(2, '0')}',
-        'endDate': '${endDate.year}-${endDate.month.toString().padLeft(2, '0')}-${endDate.day.toString().padLeft(2, '0')}',
+        'startDate': CalendarUtils.toIso(startDate),
+        'endDate': CalendarUtils.toIso(endDate),
         if (studyMode != null) 'studyMode': studyMode,
         if (restDays != null) 'restDays': restDays,
       });
       final res = await http.post(
         Uri.parse('$baseUrl/api/semesters?userId=$_userId'),
+        headers: {'Content-Type': 'application/json'},
+        body: body,
+      ).timeout(const Duration(seconds: 10));
+      if (res.statusCode != 200) return null;
+      return Semester.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Update an existing semester (use when documentId was already saved from a previous create).
+  static Future<Semester?> updateSemester({
+    required String semesterId,
+    required String semesterName,
+    required DateTime startDate,
+    required DateTime endDate,
+    String? studyMode,
+    List<String>? restDays,
+  }) async {
+    try {
+      final body = jsonEncode({
+        'semesterName': semesterName,
+        'startDate': CalendarUtils.toIso(startDate),
+        'endDate': CalendarUtils.toIso(endDate),
+        if (studyMode != null) 'studyMode': studyMode,
+        if (restDays != null) 'restDays': restDays,
+      });
+      final res = await http.put(
+        Uri.parse('$baseUrl/api/semesters/$semesterId?userId=$_userId'),
         headers: {'Content-Type': 'application/json'},
         body: body,
       ).timeout(const Duration(seconds: 10));

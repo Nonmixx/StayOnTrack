@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 /// Single deadline item for the shared in-memory list.
 /// [id] is set when loaded from or saved to Firebase (backend).
+/// [type] is 'exam' or 'assignment'; must be preserved when editing so an exam is not overwritten as assignment.
 class DeadlineItem {
   final String? id;
   final String title;
@@ -9,6 +10,8 @@ class DeadlineItem {
   final DateTime? dueDate;
   final String difficulty;
   final bool isIndividual;
+  /// 'exam' or 'assignment'; preserve when loading from API so edit flow opens correct screen.
+  final String? type;
 
   DeadlineItem({
     this.id,
@@ -17,6 +20,7 @@ class DeadlineItem {
     this.dueDate,
     required this.difficulty,
     required this.isIndividual,
+    this.type,
   });
 
   DeadlineItem copyWith({
@@ -26,6 +30,7 @@ class DeadlineItem {
     DateTime? dueDate,
     String? difficulty,
     bool? isIndividual,
+    String? type,
   }) {
     return DeadlineItem(
       id: id ?? this.id,
@@ -34,6 +39,7 @@ class DeadlineItem {
       dueDate: dueDate ?? this.dueDate,
       difficulty: difficulty ?? this.difficulty,
       isIndividual: isIndividual ?? this.isIndividual,
+      type: type ?? this.type,
     );
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'routes.dart';
 import 'api/planner_api.dart';
 import 'data/deadline_store.dart';
+import 'utils/calendar_utils.dart';
 
 /// Course and Exam Input screen (Exam Schedule). Shown after Semester Setup.
 class CourseAndExamInputPage extends StatefulWidget {
@@ -23,6 +24,8 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
   bool _fromHomeAdd = false;
   bool _fromEditDeadlinesPage = false;
   int? _editingDeadlineStoreIndex;
+  /// Backend deadline id when editing an exam from Edit Deadlines page; required to sync date/fields to Firestore.
+  String? _editingDeadlineId;
 
   // Match home_page.dart Actions: Next = Weekly Check-in, Skip = Add Deadline
   static const _nextButtonColor = Color(0xFF9C9EC3); // Weekly Check-in
@@ -41,6 +44,55 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
     _selectedExamType ??= _examTypes.first;
     _weightController.text = '0';
     _weightController.addListener(_syncWeightFromController);
+    _loadExams();
+  }
+
+  /// Load exams from backend so they persist when navigating back from Semester Setup and returning.
+  Future<void> _loadExams() async {
+    final list = await PlannerApi.getDeadlines();
+    if (!mounted) return;
+    final exams = list
+        .where((d) => (d.type ?? '').toLowerCase() == 'exam')
+        .map((d) => _deadlineToExamEntry(d))
+        .toList();
+    setState(() {
+      _exams.clear();
+      _exams.addAll(exams);
+    });
+  }
+
+  static _ExamEntry _deadlineToExamEntry(Deadline d) {
+    String courseName = d.course;
+    String examType = 'Other';
+    if (d.title.contains(' - ')) {
+      final parts = d.title.split(' - ');
+      if (parts.length >= 2) {
+        courseName = parts[0].trim();
+        examType = parts.sublist(1).join(' - ').trim();
+      }
+    }
+    int? weight;
+    if (d.difficulty != null && d.difficulty!.endsWith('%')) {
+      weight = int.tryParse(d.difficulty!.replaceAll('%', '').trim());
+    }
+    return _ExamEntry(
+      id: d.id,
+      courseName: courseName,
+      examType: examType,
+      date: _parseDueDate(d.dueDate),
+      weight: weight,
+    );
+  }
+
+  static DateTime? _parseDueDate(String? s) {
+    if (s == null || s.isEmpty) return null;
+    final parts = s.split('-');
+    if (parts.length != 3) return null;
+    final y = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    final d = int.tryParse(parts[2]);
+    if (y == null || m == null || d == null) return null;
+    return DateTime(y, m, d);
   }
 
   @override
@@ -52,6 +104,7 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
     final editIdx = args?['editDeadlineIndex'] as int?;
     if (editIdx != null && _editingDeadlineStoreIndex == null) {
       _editingDeadlineStoreIndex = editIdx;
+      _editingDeadlineId = args?['editDeadlineId'] as String?;
       _fromHomeAdd = true;
       _courseNameController.text = args?['editDeadlineCourse'] as String? ?? '';
       _examDate = args?['editDeadlineDueDate'] as DateTime?;
@@ -87,10 +140,7 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
 
   String _formatDate(DateTime? date) {
     if (date == null) return '';
-    final m = date.month.toString().padLeft(2, '0');
-    final d = date.day.toString().padLeft(2, '0');
-    final y = date.year.toString();
-    return '$m/$d/$y';
+    return CalendarUtils.formatDisplay(date);
   }
 
   static const _monthNames = [
@@ -136,22 +186,58 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
     }
     final wasAdding = _editingIndex == null && _editingDeadlineStoreIndex == null;
     final entry = _ExamEntry(
+      id: _editingIndex != null ? _exams[_editingIndex!].id : null,
       courseName: course,
       examType: _effectiveExamType,
       date: _examDate,
       weight: _weightValue,
     );
+    if (_editingIndex != null && entry.id != null && entry.id!.isNotEmpty) {
+      await PlannerApi.updateDeadline(
+        id: entry.id!,
+        title: '$course - ${entry.examType}',
+        course: course,
+        dueDate: entry.date,
+        type: 'exam',
+        difficulty: entry.weight != null && entry.weight! > 0 ? '${entry.weight}%' : null,
+      );
+      setState(() {
+        _exams[_editingIndex!] = entry;
+        _editingIndex = null;
+        _clearForm();
+      });
+      if (_fromHomeAdd && mounted) _showExamSuccessDialog();
+      return;
+    }
     if (_editingDeadlineStoreIndex != null) {
       final index = _editingDeadlineStoreIndex!;
+      final deadlineId = _editingDeadlineId;
+      if (deadlineId != null && deadlineId.isNotEmpty) {
+        final updated = await PlannerApi.updateDeadline(
+          id: deadlineId,
+          title: '$course - ${entry.examType}',
+          course: course,
+          dueDate: entry.date,
+          type: 'exam',
+          difficulty: entry.weight != null && entry.weight! > 0 ? '${entry.weight}%' : null,
+        );
+        if (updated != null) {
+          await PlannerApi.generatePlan(availableHours: 20);
+        }
+      }
+      if (!mounted) return;
       deadlineStore.updateAt(index, DeadlineItem(
+        id: deadlineId,
         title: '$course - ${entry.examType}',
         courseName: course,
         dueDate: entry.date,
-        difficulty: '${entry.weight}%',
+        difficulty: entry.weight != null ? '${entry.weight}%' : '—',
         isIndividual: true,
+        type: 'exam',
       ));
       setState(() {
         _editingDeadlineStoreIndex = null;
+        _editingDeadlineId = null;
         _clearForm();
       });
       Navigator.of(context).pop();
@@ -175,6 +261,19 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
           isIndividual: true,
         ));
         await PlannerApi.generatePlan(availableHours: 20);
+        if (!mounted) return;
+        setState(() {
+          _exams.add(_ExamEntry(
+            id: created.id,
+            courseName: entry.courseName,
+            examType: entry.examType,
+            date: entry.date,
+            weight: entry.weight,
+          ));
+          _clearForm();
+        });
+        if (_fromHomeAdd && mounted) _showExamSuccessDialog();
+        return;
       }
     }
     setState(() {
@@ -247,7 +346,12 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
     setState(() => _editingIndex = index);
   }
 
-  void _deleteExam(int index) {
+  Future<void> _deleteExam(int index) async {
+    final entry = _exams[index];
+    if (entry.id != null && entry.id!.isNotEmpty) {
+      await PlannerApi.deleteDeadline(entry.id!);
+    }
+    if (!mounted) return;
     setState(() {
       _exams.removeAt(index);
       if (_editingIndex == index) {
@@ -363,7 +467,7 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
                           borderRadius: BorderRadius.circular(8),
                           child: InputDecorator(
                             decoration: InputDecoration(
-                              hintText: 'mm/dd/yyyy',
+                              hintText: 'dd/mm/yyyy',
                               hintStyle: const TextStyle(color: _hintGray),
                               filled: true,
                               fillColor: Colors.grey.shade50,
@@ -584,12 +688,14 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
 }
 
 class _ExamEntry {
+  final String? id; // backend deadline id; set when created or loaded
   final String courseName;
   final String examType;
   final DateTime? date;
   final int? weight;
 
   _ExamEntry({
+    this.id,
     required this.courseName,
     required this.examType,
     this.date,

@@ -328,6 +328,17 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// Avoid showing course name twice for exams (title is already "Course - ExamType").
+  String _nearestDeadlineBannerText() {
+    final d = _nearestDeadline!;
+    final course = d.course.trim();
+    final title = d.title.trim();
+    final namePart = (course.isNotEmpty && title.startsWith(course))
+        ? title
+        : (course.isEmpty ? title : '$course $title');
+    return '$namePart ${_daysUntil(d.dueDate)}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final completedCount = _tasks.where((t) => t.completed).length;
@@ -390,7 +401,7 @@ class _HomePageState extends State<HomePage> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            '${_nearestDeadline!.course} ${_nearestDeadline!.title} ${_daysUntil(_nearestDeadline!.dueDate)}',
+                            _nearestDeadlineBannerText(),
                             style: const TextStyle(
                               fontFamily: 'Arimo',
                               fontSize: 14,

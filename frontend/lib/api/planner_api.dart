@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 
+import '../utils/calendar_utils.dart';
+
 /// Backend URL. 10.0.2.2 = Android emulator; localhost = web/desktop.
 String get baseUrl => kIsWeb ? 'http://localhost:9091' : 'http://10.0.2.2:9091';
 
@@ -132,9 +134,7 @@ class PlannerApi {
       final body = jsonEncode({
         'title': title,
         'course': course,
-        'dueDate': dueDate != null
-            ? '${dueDate.year}-${dueDate.month.toString().padLeft(2, '0')}-${dueDate.day.toString().padLeft(2, '0')}'
-            : null,
+        'dueDate': dueDate != null ? CalendarUtils.toIso(dueDate) : null,
         'type': type,
         if (difficulty != null) 'difficulty': difficulty,
         if (isIndividual != null) 'isIndividual': isIndividual,
@@ -165,9 +165,7 @@ class PlannerApi {
       final body = jsonEncode({
         'title': title,
         'course': course,
-        'dueDate': dueDate != null
-            ? '${dueDate.year}-${dueDate.month.toString().padLeft(2, '0')}-${dueDate.day.toString().padLeft(2, '0')}'
-            : null,
+        'dueDate': dueDate != null ? CalendarUtils.toIso(dueDate) : null,
         'type': type,
         if (difficulty != null) 'difficulty': difficulty,
         if (isIndividual != null) 'isIndividual': isIndividual,
@@ -203,8 +201,18 @@ class Deadline {
   final String course;
   final String? dueDate;
   final String? type;
+  final String? difficulty;
+  final bool? isIndividual;
 
-  Deadline({required this.id, required this.title, required this.course, this.dueDate, this.type});
+  Deadline({
+    required this.id,
+    required this.title,
+    required this.course,
+    this.dueDate,
+    this.type,
+    this.difficulty,
+    this.isIndividual,
+  });
 
   factory Deadline.fromJson(Map<String, dynamic> json) {
     String? dueDateStr;
@@ -217,6 +225,8 @@ class Deadline {
       course: json['course'] as String? ?? '',
       dueDate: dueDateStr,
       type: json['type'] as String?,
+      difficulty: json['difficulty'] as String?,
+      isIndividual: json['isIndividual'] as bool?,
     );
   }
 }

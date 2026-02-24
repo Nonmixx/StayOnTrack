@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'routes.dart';
 import 'api/planner_api.dart';
 import 'data/deadline_store.dart';
+import 'utils/calendar_utils.dart';
 
 /// Assignments & Projects screen. Shown after Course and Exam Input (or via Skip to Assignments).
 class AssignmentAndProjectPage extends StatefulWidget {
@@ -35,6 +36,42 @@ class _AssignmentAndProjectPageState extends State<AssignmentAndProjectPage> {
   void initState() {
     super.initState();
     _selectedDifficulty ??= _difficulties[1]; // Medium
+    _loadAssignments();
+  }
+
+  Future<void> _loadAssignments() async {
+    final list = await PlannerApi.getDeadlines();
+    if (!mounted) return;
+    final assignments = list
+        .where((d) => d.type == 'assignment')
+        .map((d) => _deadlineToAssignmentEntry(d))
+        .toList();
+    setState(() {
+      _assignments.clear();
+      _assignments.addAll(assignments);
+    });
+  }
+
+  _AssignmentEntry _deadlineToAssignmentEntry(Deadline d) {
+    return _AssignmentEntry(
+      id: d.id,
+      courseName: d.course,
+      assignmentName: d.title,
+      deadline: _parseDueDate(d.dueDate),
+      difficulty: d.difficulty ?? 'Medium',
+      isIndividual: d.isIndividual ?? true,
+    );
+  }
+
+  static DateTime? _parseDueDate(String? s) {
+    if (s == null || s.isEmpty) return null;
+    final parts = s.split('-');
+    if (parts.length != 3) return null;
+    final y = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    final d = int.tryParse(parts[2]);
+    if (y == null || m == null || d == null) return null;
+    return DateTime(y, m, d);
   }
 
   @override
@@ -46,10 +83,7 @@ class _AssignmentAndProjectPageState extends State<AssignmentAndProjectPage> {
 
   String _formatDate(DateTime? date) {
     if (date == null) return '';
-    final m = date.month.toString().padLeft(2, '0');
-    final d = date.day.toString().padLeft(2, '0');
-    final y = date.year.toString();
-    return '$m/$d/$y';
+    return CalendarUtils.formatDisplay(date);
   }
 
   static const _monthNames = [
@@ -79,12 +113,35 @@ class _AssignmentAndProjectPageState extends State<AssignmentAndProjectPage> {
     final name = _assignmentNameController.text.trim();
     if (course.isEmpty || name.isEmpty) return;
     final entry = _AssignmentEntry(
+      id: _editingIndex != null ? _assignments[_editingIndex!].id : null,
       courseName: course,
       assignmentName: name,
       deadline: _deadline,
       difficulty: _selectedDifficulty ?? 'Medium',
       isIndividual: _isIndividual,
     );
+    if (_editingIndex != null && entry.id != null && entry.id!.isNotEmpty) {
+      await PlannerApi.updateDeadline(
+        id: entry.id!,
+        title: name,
+        course: course,
+        dueDate: _deadline,
+        type: 'assignment',
+        difficulty: _selectedDifficulty ?? 'Medium',
+        isIndividual: _isIndividual,
+      );
+      if (!mounted) return;
+      setState(() {
+        _assignments[_editingIndex!] = entry;
+        _editingIndex = null;
+        _courseNameController.clear();
+        _assignmentNameController.clear();
+        _deadline = null;
+        _selectedDifficulty = _difficulties[1];
+        _isIndividual = true;
+      });
+      return;
+    }
     if (_editingIndex == null) {
       final created = await PlannerApi.createDeadline(
         title: name,
@@ -104,6 +161,23 @@ class _AssignmentAndProjectPageState extends State<AssignmentAndProjectPage> {
           isIndividual: _isIndividual,
         ));
         await PlannerApi.generatePlan(availableHours: 20);
+        if (!mounted) return;
+        setState(() {
+          _assignments.add(_AssignmentEntry(
+            id: created.id,
+            courseName: course,
+            assignmentName: name,
+            deadline: _deadline,
+            difficulty: _selectedDifficulty ?? 'Medium',
+            isIndividual: _isIndividual,
+          ));
+          _courseNameController.clear();
+          _assignmentNameController.clear();
+          _deadline = null;
+          _selectedDifficulty = _difficulties[1];
+          _isIndividual = true;
+        });
+        return;
       }
     }
     setState(() {
@@ -131,7 +205,12 @@ class _AssignmentAndProjectPageState extends State<AssignmentAndProjectPage> {
     setState(() => _editingIndex = index);
   }
 
-  void _deleteAssignment(int index) {
+  Future<void> _deleteAssignment(int index) async {
+    final entry = _assignments[index];
+    if (entry.id != null && entry.id!.isNotEmpty) {
+      await PlannerApi.deleteDeadline(entry.id!);
+    }
+    if (!mounted) return;
     setState(() {
       _assignments.removeAt(index);
       if (_editingIndex == index) {
@@ -236,7 +315,7 @@ class _AssignmentAndProjectPageState extends State<AssignmentAndProjectPage> {
                                 borderRadius: BorderRadius.circular(8),
                                 child: InputDecorator(
                                   decoration: InputDecoration(
-                                    hintText: 'mm/dd/yyyy',
+                                    hintText: 'dd/mm/yyyy',
                                     hintStyle: const TextStyle(color: _hintGray),
                                     filled: true,
                                     fillColor: Colors.grey.shade50,
@@ -403,8 +482,8 @@ class _AssignmentAndProjectPageState extends State<AssignmentAndProjectPage> {
   }
 
   void _goNext(BuildContext context) {
-    // Go to Focus & Energy Profile (next step after Assignments and Projects)
-    Navigator.of(context).pushReplacementNamed(AppRoutes.focusAndEnergyProfile);
+    // Use pushNamed so Back from Focus returns here with form state preserved.
+    Navigator.of(context).pushNamed(AppRoutes.focusAndEnergyProfile);
   }
 
   InputDecoration _inputDecoration({String? hint}) {
@@ -431,6 +510,7 @@ class _AssignmentAndProjectPageState extends State<AssignmentAndProjectPage> {
 }
 
 class _AssignmentEntry {
+  final String? id; // backend deadline id; set when created or loaded
   final String courseName;
   final String assignmentName;
   final DateTime? deadline;
@@ -438,6 +518,7 @@ class _AssignmentEntry {
   final bool isIndividual;
 
   _AssignmentEntry({
+    this.id,
     required this.courseName,
     required this.assignmentName,
     this.deadline,

@@ -1,5 +1,6 @@
 package com.stayontrack.controller;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.springframework.http.ResponseEntity;
@@ -24,6 +25,7 @@ public class FocusProfileController {
             @RequestParam(defaultValue = "default-user") String userId) {
         try {
             profile.setUserId(userId);
+            profile.setCreatedAt(LocalDateTime.now());
             FocusProfile created = firestoreService.createFocusProfile(profile);
             return ResponseEntity.ok(created);
         } catch (Exception e) {

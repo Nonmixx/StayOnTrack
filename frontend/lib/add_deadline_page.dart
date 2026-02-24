@@ -6,6 +6,7 @@ import 'data/deadline_store.dart';
 
 /// Add Deadline screen. Opened from Home or Edit Deadlines.
 /// [editIndex] and [editId] set when editing an existing deadline.
+/// [initialType] when editing: preserve existing 'exam' or 'assignment' so we do not overwrite an exam as assignment.
 class AddDeadlinePage extends StatefulWidget {
   const AddDeadlinePage({
     super.key,
@@ -16,6 +17,7 @@ class AddDeadlinePage extends StatefulWidget {
     this.initialDueDate,
     this.initialDifficulty,
     this.initialIsIndividual,
+    this.initialType,
   });
 
   final int? editIndex;
@@ -25,6 +27,8 @@ class AddDeadlinePage extends StatefulWidget {
   final DateTime? initialDueDate;
   final String? initialDifficulty;
   final bool? initialIsIndividual;
+  /// When editing, use this type in updateDeadline so an exam is not overwritten as assignment.
+  final String? initialType;
 
   @override
   State<AddDeadlinePage> createState() => _AddDeadlinePageState();
@@ -93,12 +97,15 @@ class _AddDeadlinePageState extends State<AddDeadlinePage> {
     if (course.isEmpty || title.isEmpty) return;
 
     if (_isEditMode && widget.editId != null) {
+      // Preserve existing type when editing so an exam is not overwritten as assignment.
+      final type = (widget.initialType ?? 'assignment').toString().trim().toLowerCase();
+      final deadlineType = type == 'exam' ? 'exam' : 'assignment';
       final updated = await PlannerApi.updateDeadline(
         id: widget.editId!,
         title: title,
         course: course,
         dueDate: _dueDate,
-        type: 'assignment',
+        type: deadlineType,
         difficulty: _selectedDifficulty,
         isIndividual: _isIndividual,
       );
@@ -110,6 +117,7 @@ class _AddDeadlinePageState extends State<AddDeadlinePage> {
           dueDate: _dueDate,
           difficulty: _selectedDifficulty ?? 'Medium',
           isIndividual: _isIndividual,
+          type: widget.initialType ?? 'assignment',
         );
         if (widget.editIndex != null) {
           deadlineStore.updateAt(widget.editIndex!, item);

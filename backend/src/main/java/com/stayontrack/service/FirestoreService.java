@@ -435,6 +435,12 @@ public class FirestoreService {
     // ==================== FOCUS PROFILES ====================
 
     public FocusProfile createFocusProfile(FocusProfile profile) throws ExecutionException, InterruptedException {
+        if (profile.getUserId() == null || profile.getUserId().isEmpty()) {
+            throw new IllegalArgumentException("FocusProfile userId is required for Firestore");
+        }
+        if (profile.getCreatedAt() == null) {
+            profile.setCreatedAt(LocalDateTime.now());
+        }
         Firestore db = getFirestore();
         Map<String, Object> data = focusProfileToMap(profile);
         DocumentReference docRef = db.collection(FOCUS_PROFILES_COLLECTION).add(data).get();
@@ -465,6 +471,9 @@ public class FirestoreService {
         if (profile.getPeakFocusTimes() != null) updates.put("peakFocusTimes", profile.getPeakFocusTimes());
         if (profile.getLowEnergyTimes() != null) updates.put("lowEnergyTimes", profile.getLowEnergyTimes());
         if (profile.getTypicalStudyDuration() != null) updates.put("typicalStudyDuration", profile.getTypicalStudyDuration());
+        if (updates.isEmpty()) {
+            return profile;
+        }
         docRef.update(updates).get();
         profile.setId(profileId);
         return profile;
