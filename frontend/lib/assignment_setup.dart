@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:html' as html;
 import 'api/group_api.dart';
 
 /// Page 6.2 - Group & Assignment Setup
@@ -18,11 +17,10 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
   final TextEditingController _briefController = TextEditingController();
 
   DateTime? _selectedDeadline;
-  String? _uploadedFileName;
-  bool _isAddMemberHovered = false;
-  bool _isCreating = false;
+  bool _isGenerating = false;
 
   List<Map<String, dynamic>> _members = [
+    {'name': TextEditingController(), 'strengths': <String>[]},
     {'name': TextEditingController(), 'strengths': <String>[]},
   ];
 
@@ -35,6 +33,9 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
     'Testing',
   ];
 
+  // ── Validation ──────────────────────────────────────────────────────────────
+
+  /// True when all required fields are filled.
   bool get _isFormValid {
     if (_groupNameController.text.trim().isEmpty) return false;
     if (_courseNameController.text.trim().isEmpty) return false;
@@ -44,54 +45,48 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
       (m) => (m['name'] as TextEditingController).text.trim().isNotEmpty,
     );
     if (!hasNamedMember) return false;
-    final hasBrief = _briefController.text.trim().isNotEmpty;
-    final hasFile = _uploadedFileName != null;
-    if (!hasBrief && !hasFile) return false;
+    if (_briefController.text.trim().isEmpty) return false;
     return true;
   }
 
   @override
   void initState() {
     super.initState();
+    // Rebuild whenever any text field changes so button enables/disables live
     _groupNameController.addListener(() => setState(() {}));
     _courseNameController.addListener(() => setState(() {}));
     _assignmentTitleController.addListener(() => setState(() {}));
     _briefController.addListener(() => setState(() {}));
-    (_members[0]['name'] as TextEditingController).addListener(
-      () => setState(() {}),
-    );
   }
 
-  Future<void> _createAndNavigateToTaskBreakdown() async {
-    if (!_isFormValid || _selectedDeadline == null) return;
-    setState(() => _isCreating = true);
+  Future<void> _generateTasks() async {
+    setState(() => _isGenerating = true);
+
     final members = _members
-        .map((m) {
-          final name = (m['name'] as TextEditingController).text.trim();
-          if (name.isEmpty) return null;
-          final strengths =
-              (m['strengths'] as List<String>).map((s) => s).toList();
-          return GroupMember(name: name, strengths: strengths);
-        })
-        .whereType<GroupMember>()
+        .where(
+          (m) => (m['name'] as TextEditingController).text.trim().isNotEmpty,
+        )
+        .map(
+          (m) => GroupMember(
+            name: (m['name'] as TextEditingController).text.trim(),
+            strengths: List<String>.from(m['strengths'] as List),
+          ),
+        )
         .toList();
-    if (members.isEmpty) {
-      setState(() => _isCreating = false);
-      return;
-    }
+
     final assignmentId = await GroupApi.createGroupAssignment(
       groupName: _groupNameController.text.trim(),
       courseName: _courseNameController.text.trim(),
       assignmentTitle: _assignmentTitleController.text.trim(),
       deadline: _selectedDeadline!,
       members: members,
-      brief: _briefController.text.trim().isNotEmpty
-          ? _briefController.text.trim()
-          : 'Assignment brief (see uploaded file).',
+      brief: _briefController.text.trim(),
     );
+
     if (!mounted) return;
-    setState(() => _isCreating = false);
-    if (assignmentId != null && assignmentId.isNotEmpty) {
+    setState(() => _isGenerating = false);
+
+    if (assignmentId != null) {
       Navigator.pushNamed(
         context,
         '/task-breakdown',
@@ -100,12 +95,14 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Failed to create assignment. Please try again.'),
+          content: Text('Failed to generate tasks. Please try again.'),
+          backgroundColor: Color(0xFFE70030),
         ),
       );
     }
   }
 
+  // Shared input decoration with shadow
   BoxDecoration get _inputBoxDecoration => BoxDecoration(
     color: const Color(0xFFFFFFFF),
     borderRadius: BorderRadius.circular(8),
@@ -147,6 +144,7 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
     contentPadding: const EdgeInsets.all(12),
   );
 
+  // Shared card decoration with shadow
   BoxDecoration get _cardDecoration => BoxDecoration(
     color: const Color(0xFFFFFFFF),
     borderRadius: BorderRadius.circular(14),
@@ -164,28 +162,13 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
     ],
   );
 
-  Future<void> _pickFile() async {
-    final uploadInput = html.FileUploadInputElement();
-    uploadInput.accept = '.pdf,.doc,.docx';
-    uploadInput.click();
-    uploadInput.onChange.listen((event) {
-      final files = uploadInput.files;
-      if (files != null && files.isNotEmpty) {
-        setState(() {
-          _uploadedFileName = files.first.name;
-        });
-      }
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFFFF8F0),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFFFFFFF),
-        elevation: 1,
-        shadowColor: Colors.black.withOpacity(0.1),
+        backgroundColor: Colors.white,
+        elevation: 0,
         leading: IconButton(
           icon: const Icon(
             Icons.arrow_back,
@@ -198,11 +181,9 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
         title: const Text(
           'New Group Assignment',
           style: TextStyle(
-            fontFamily: 'Arimo',
-            fontSize: 16,
-            height: 1.5,
-            color: Color(0xFF101828),
-            fontWeight: FontWeight.w400,
+            color: Colors.black87,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),
@@ -253,6 +234,7 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
     );
   }
 
+  // ── SECTION A: Group Members ──
   Widget _buildGroupMembersSection() {
     return Container(
       decoration: _cardDecoration,
@@ -270,9 +252,11 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
             ),
           ),
           const SizedBox(height: 10),
+          // Divider under title, same width as cards
           const Divider(color: Color(0xFFE7E6EB), thickness: 1, height: 1),
           const SizedBox(height: 16),
 
+          // Group Name row — in a card with shadow
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
@@ -324,69 +308,45 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
           ),
           const SizedBox(height: 16),
 
-          ..._members.asMap().entries.map(
-            (entry) => _buildMemberCard(entry.key, entry.value),
-          ),
+          // Member List
+          ..._members.asMap().entries.map((entry) {
+            return _buildMemberCard(entry.key, entry.value);
+          }),
 
           const SizedBox(height: 4),
 
-          // ── CHANGED: dashed border + hover (color changes on hover) ──
-          MouseRegion(
-            onEnter: (_) => setState(() => _isAddMemberHovered = true),
-            onExit: (_) => setState(() => _isAddMemberHovered = false),
-            cursor: SystemMouseCursors.click,
-            child: GestureDetector(
-              onTap: () {
-                final controller = TextEditingController();
-                controller.addListener(() => setState(() {}));
-                setState(() {
-                  _members.add({'name': controller, 'strengths': <String>[]});
+          // Add Member Button — dashed border, text label
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                _members.add({
+                  'name': TextEditingController(),
+                  'strengths': <String>[],
                 });
-              },
-              child: CustomPaint(
-                painter: _DashedBorderPainter(
-                  color: _isAddMemberHovered
-                      ? const Color(0xFFAFBCDD)
-                      : const Color(0xFF99A1AF),
-                  borderRadius: 10,
-                  dashWidth: 6,
-                  dashSpace: 4,
-                  strokeWidth: _isAddMemberHovered ? 1.8 : 1.5,
+              });
+            },
+            child: CustomPaint(
+              painter: _DashedBorderPainter(
+                color: const Color(0xFF99A1AF),
+                borderRadius: 10,
+                dashWidth: 6,
+                dashSpace: 4,
+              ),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFFFFF),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  decoration: BoxDecoration(
-                    color: _isAddMemberHovered
-                        ? const Color(0xFFEFF3FB)
-                        : const Color(0xFFFFFFFF),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Center(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.add,
-                          size: 16,
-                          color: _isAddMemberHovered
-                              ? const Color(0xFFAFBCDD)
-                              : const Color(0xFF99A1AF),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Add member',
-                          style: TextStyle(
-                            fontFamily: 'Arimo',
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: _isAddMemberHovered
-                                ? const Color(0xFFAFBCDD)
-                                : const Color(0xFF99A1AF),
-                          ),
-                        ),
-                      ],
+                child: const Center(
+                  child: Text(
+                    '+ Add member',
+                    style: TextStyle(
+                      fontFamily: 'Arimo',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF99A1AF),
                     ),
                   ),
                 ),
@@ -398,6 +358,7 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
     );
   }
 
+  // Individual Member Card
   Widget _buildMemberCard(int index, Map<String, dynamic> member) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -422,6 +383,7 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Member header
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -446,6 +408,8 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
             ],
           ),
           const SizedBox(height: 12),
+
+          // Name input with shadow
           Container(
             decoration: _inputBoxDecoration,
             child: TextField(
@@ -459,6 +423,7 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
             ),
           ),
           const SizedBox(height: 12),
+
           const Text(
             'Strengths',
             style: TextStyle(
@@ -469,6 +434,8 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
             ),
           ),
           const SizedBox(height: 8),
+
+          // Strength chips with shadow
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -534,6 +501,7 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
     );
   }
 
+  // ── SECTION B: Assignment Details ──
   Widget _buildAssignmentDetailsSection() {
     return Container(
       decoration: _cardDecoration,
@@ -553,18 +521,24 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
           const SizedBox(height: 10),
           const Divider(color: Color(0xFFE7E6EB), thickness: 1, height: 1),
           const SizedBox(height: 16),
+
+          // Course Name
           _buildLabeledField(
             label: 'Course Name',
             controller: _courseNameController,
             hint: 'e.g. CS101',
           ),
           const SizedBox(height: 16),
+
+          // Assignment Title
           _buildLabeledField(
             label: 'Assignment Title',
             controller: _assignmentTitleController,
             hint: 'e.g. Final Group Project',
           ),
           const SizedBox(height: 16),
+
+          // Deadline
           const Text(
             'Deadline',
             style: TextStyle(
@@ -587,12 +561,14 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
                 final TimeOfDay? pickedTime = await showTimePicker(
                   context: context,
                   initialTime: TimeOfDay.now(),
-                  builder: (context, child) => MediaQuery(
-                    data: MediaQuery.of(
-                      context,
-                    ).copyWith(alwaysUse24HourFormat: false),
-                    child: child!,
-                  ),
+                  builder: (context, child) {
+                    return MediaQuery(
+                      data: MediaQuery.of(
+                        context,
+                      ).copyWith(alwaysUse24HourFormat: false),
+                      child: child!,
+                    );
+                  },
                 );
                 if (pickedTime != null) {
                   setState(() {
@@ -668,6 +644,7 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
     return '$day/$month/$year  ${hour12.toString().padLeft(2, '0')}:$minute $ampm';
   }
 
+  // ── SECTION C: Assignment Questions/Brief ──
   Widget _buildAssignmentBriefSection() {
     return Container(
       decoration: _cardDecoration,
@@ -687,6 +664,8 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
           const SizedBox(height: 10),
           const Divider(color: Color(0xFFE7E6EB), thickness: 1, height: 1),
           const SizedBox(height: 16),
+
+          // Paste brief text area — F5F5F5, shadow, 909EC3 hint
           Container(
             decoration: BoxDecoration(
               color: const Color(0xFFF5F5F5),
@@ -742,6 +721,8 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
             ),
           ),
           const SizedBox(height: 16),
+
+          // OR divider
           Row(
             children: const [
               Expanded(child: Divider(color: Color(0xFFE7E6EB), thickness: 1)),
@@ -761,8 +742,10 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
             ],
           ),
           const SizedBox(height: 16),
+
+          // Upload button — dashed AFBCDD stroke, F5F5F5 fill, no shadow
           GestureDetector(
-            onTap: _pickFile,
+            onTap: () {},
             child: CustomPaint(
               painter: _DashedBorderPainter(
                 color: const Color(0xFFAFBCDD),
@@ -779,24 +762,18 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
+                  children: const [
                     Icon(
-                      _uploadedFileName != null
-                          ? Icons.check_circle_outline
-                          : Icons.upload_file_outlined,
-                      color: _uploadedFileName != null
-                          ? const Color(0xFF008236)
-                          : const Color(0xFF909EC3),
+                      Icons.upload_file_outlined,
+                      color: Color(0xFF909EC3),
                       size: 32,
                     ),
-                    const SizedBox(height: 8),
+                    SizedBox(height: 8),
                     Text(
-                      _uploadedFileName ?? 'Upload PDF / DOC',
+                      'Upload PDF / DOC',
                       style: TextStyle(
                         fontFamily: 'Arimo',
-                        color: _uploadedFileName != null
-                            ? const Color(0xFF008236)
-                            : const Color(0xFF909EC3),
+                        color: Color(0xFF909EC3),
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
                       ),
@@ -807,6 +784,8 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
             ),
           ),
           const SizedBox(height: 12),
+
+          // AI note — blue
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -840,6 +819,7 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
     );
   }
 
+  // ── SECTION D: Generate Button ──
   Widget _buildGenerateButton() {
     final bool canGenerate = _isFormValid;
     return Container(
@@ -858,14 +838,16 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
                   offset: const Offset(0, 1),
                 ),
               ]
-            : [],
+            : [], // no shadow when disabled
       ),
       child: ElevatedButton(
-        onPressed: (canGenerate && !_isCreating) ? _createAndNavigateToTaskBreakdown : null,
+        onPressed: (canGenerate && !_isGenerating) ? _generateTasks : null,
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF9C9EC3),
           foregroundColor: const Color(0xFFFFFFFF),
-          disabledBackgroundColor: const Color(0xFFD4D6E8),
+          disabledBackgroundColor: const Color(
+            0xFFD4D6E8,
+          ), // lighter purple-grey when disabled
           disabledForegroundColor: const Color(0xFFFFFFFF).withOpacity(0.5),
           elevation: 0,
           padding: const EdgeInsets.symmetric(vertical: 16),
@@ -873,13 +855,13 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
             borderRadius: BorderRadius.circular(10),
           ),
         ),
-        child: _isCreating
+        child: _isGenerating
             ? const SizedBox(
                 height: 20,
                 width: 20,
                 child: CircularProgressIndicator(
+                  color: Colors.white,
                   strokeWidth: 2,
-                  color: Color(0xFFFFFFFF),
                 ),
               )
             : const Text(
@@ -894,6 +876,7 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
     );
   }
 
+  // Helper: labeled text field with shadow
   Widget _buildLabeledField({
     required String label,
     required TextEditingController controller,
@@ -941,6 +924,7 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
   }
 }
 
+/// Custom painter for dashed border
 class _DashedBorderPainter extends CustomPainter {
   final Color color;
   final double borderRadius;
@@ -962,18 +946,22 @@ class _DashedBorderPainter extends CustomPainter {
       ..color = color
       ..strokeWidth = strokeWidth
       ..style = PaintingStyle.stroke;
+
     final RRect rrect = RRect.fromRectAndRadius(
       Rect.fromLTWH(0, 0, size.width, size.height),
       Radius.circular(borderRadius),
     );
+
     final Path path = Path()..addRRect(rrect);
+
     for (final metric in path.computeMetrics()) {
       double distance = 0.0;
       bool draw = true;
       while (distance < metric.length) {
         final double len = draw ? dashWidth : dashSpace;
-        if (draw)
+        if (draw) {
           canvas.drawPath(metric.extractPath(distance, distance + len), paint);
+        }
         distance += len;
         draw = !draw;
       }
@@ -984,6 +972,5 @@ class _DashedBorderPainter extends CustomPainter {
   bool shouldRepaint(_DashedBorderPainter oldDelegate) =>
       oldDelegate.color != color ||
       oldDelegate.dashWidth != dashWidth ||
-      oldDelegate.dashSpace != dashSpace ||
-      oldDelegate.strokeWidth != strokeWidth;
+      oldDelegate.dashSpace != dashSpace;
 }

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'api/group_api.dart';
 
 /// Page 6.4 - AI Task Distribution
-// ── CHANGED: StatefulWidget to support dynamic loading ──
 class TaskDistributionPage extends StatefulWidget {
   const TaskDistributionPage({Key? key}) : super(key: key);
 
@@ -40,7 +39,6 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // ── CHANGED: read assignmentId from route arguments ──
     if (_assignmentId.isEmpty) {
       final args =
           ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
@@ -49,7 +47,6 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
     }
   }
 
-  // ── CHANGED: load distribution from API ──
   Future<void> _loadDistribution() async {
     setState(() => _isLoading = true);
     final data = await GroupApi.getTaskDistribution(_assignmentId);
@@ -59,7 +56,6 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
     });
   }
 
-  // ── CHANGED: regenerate calls API and reloads ──
   Future<void> _regenerateDistribution() async {
     setState(() => _isLoading = true);
     final data = await GroupApi.regenerateDistribution(_assignmentId);
@@ -69,10 +65,115 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
     });
   }
 
-  // ── CHANGED: confirm calls API then navigates home ──
+  // Confirm distribution → call API → return to Group Overview
   Future<void> _confirmDistribution() async {
     final success = await GroupApi.confirmDistribution(_assignmentId);
     if (success && mounted) {
+      Navigator.popUntil(context, (route) => route.isFirst);
+    }
+  }
+
+  Future<void> _confirmDelete(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFFFFFFFF),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEE2E2),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.delete_outline,
+                color: Color(0xFFE70030),
+                size: 22,
+              ),
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              'Delete Assignment',
+              style: TextStyle(
+                fontFamily: 'Arimo',
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF101828),
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Are you sure you want to delete this assignment? This action cannot be undone.',
+              style: TextStyle(
+                fontFamily: 'Arimo',
+                fontSize: 13,
+                color: Color(0xFF6A7282),
+                height: 1.5,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF4A5565),
+                    side: const BorderSide(color: Color(0xFFE7E6EB)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(
+                      fontFamily: 'Arimo',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFE70030),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text(
+                    'Delete',
+                    style: TextStyle(
+                      fontFamily: 'Arimo',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
       Navigator.popUntil(context, (route) => route.isFirst);
     }
   }
@@ -82,9 +183,8 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFFFF8F0),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFFFFFFF),
-        elevation: 1,
-        shadowColor: Colors.black.withOpacity(0.1),
+        backgroundColor: Colors.white,
+        elevation: 0,
         leading: IconButton(
           icon: const Icon(
             Icons.arrow_back,
@@ -97,16 +197,13 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
         title: const Text(
           'AI Task Distribution',
           style: TextStyle(
-            fontFamily: 'Arimo',
-            fontSize: 16,
-            height: 1.5,
-            color: Color(0xFF101828),
-            fontWeight: FontWeight.w400,
+            color: Colors.black87,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),
       body: _isLoading
-          // ── CHANGED: loading state ──
           ? const Center(
               child: CircularProgressIndicator(color: Color(0xFFAFBCDD)),
             )
@@ -116,8 +213,7 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Header gradient card — unchanged, still hardcoded display
-                    // (backend should return assignment metadata; for now kept as-is)
+                    // Header gradient card
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
@@ -148,28 +244,49 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               const SizedBox.shrink(),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 3,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFDBFCE7),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: const Text(
-                                  'On track',
-                                  style: TextStyle(
-                                    fontFamily: 'Arimo',
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF008236),
+                              GestureDetector(
+                                onTap: () => _confirmDelete(context),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 9,
+                                    vertical: 5,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFEE2E2),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: const Color(
+                                        0xFFE70030,
+                                      ).withOpacity(0.2),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: const [
+                                      Icon(
+                                        Icons.delete_outline,
+                                        size: 13,
+                                        color: Color(0xFFE70030),
+                                      ),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'Delete',
+                                        style: TextStyle(
+                                          fontFamily: 'Arimo',
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFFE70030),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
                             ],
                           ),
                           const SizedBox(height: 6),
+
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 8,
@@ -190,6 +307,7 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
                             ),
                           ),
                           const SizedBox(height: 8),
+
                           const Text(
                             'Marketing Strategy Deck',
                             style: TextStyle(
@@ -201,6 +319,7 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
                             ),
                           ),
                           const SizedBox(height: 10),
+
                           Row(
                             children: [
                               const Text(
@@ -235,6 +354,7 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
                             ],
                           ),
                           const SizedBox(height: 10),
+
                           Row(
                             mainAxisAlignment: MainAxisAlignment.end,
                             children: [
@@ -285,7 +405,7 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
                                       color: Color(0xFF364153),
                                     ),
                                     const SizedBox(width: 5),
-                                    // ── CHANGED: show real task count ──
+                                    // Show real task count from API data
                                     Text(
                                       '${_distributions.fold(0, (sum, m) => sum + m.taskCount)} Tasks Total',
                                       style: const TextStyle(
@@ -306,6 +426,7 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
 
                     const SizedBox(height: 16),
 
+                    // Task Distribution header + Edit Setup
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -319,7 +440,6 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
                           ),
                         ),
                         InkWell(
-                          // ── CHANGED: pass assignmentId to edit setup ──
                           onTap: () => Navigator.pushNamed(
                             context,
                             '/edit-setup',
@@ -373,7 +493,7 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
 
                     const SizedBox(height: 12),
 
-                    // ── CHANGED: empty state when no distributions ──
+                    // Empty state
                     if (_distributions.isEmpty)
                       Container(
                         width: double.infinity,
@@ -409,18 +529,18 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
                         ),
                       )
                     else
-                      // ── CHANGED: render from API data ──
                       ..._distributions.map(
                         (member) => _buildMemberSection(member),
                       ),
 
                     const SizedBox(height: 4),
 
+                    // Bottom action buttons
                     Row(
                       children: [
                         Expanded(
                           child: ElevatedButton(
-                            // ── CHANGED: calls confirm API ──
+                            // Calls API then navigates back to Group Overview
                             onPressed: _confirmDistribution,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFFC8CEDF),
@@ -444,7 +564,6 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: ElevatedButton(
-                            // ── CHANGED: calls regenerate API ──
                             onPressed: _regenerateDistribution,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF9C9EC3),
@@ -507,7 +626,6 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
     );
   }
 
-  // ── CHANGED: accepts MemberDistribution model instead of Map ──
   Widget _buildMemberSection(MemberDistribution member) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -672,7 +790,6 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
     );
   }
 
-  // ── CHANGED: accepts MemberTask model instead of Map ──
   Widget _buildTaskCard(MemberTask task) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),

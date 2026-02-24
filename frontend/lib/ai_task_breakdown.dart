@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'api/group_api.dart';
 
 /// Page 6.3 - AI Task Breakdown
-// ── CHANGED: StatefulWidget to support dynamic loading ──
 class TaskBreakdownPage extends StatefulWidget {
   const TaskBreakdownPage({Key? key}) : super(key: key);
 
@@ -15,7 +14,6 @@ class _TaskBreakdownPageState extends State<TaskBreakdownPage> {
   bool _isLoading = true;
   String _assignmentId = '';
 
-  // ── CHANGED: effort colour helpers (replaces hardcoded map values) ──
   Color _effortColor(String effort) {
     switch (effort) {
       case 'Low':
@@ -23,7 +21,7 @@ class _TaskBreakdownPageState extends State<TaskBreakdownPage> {
       case 'High':
         return const Color(0xFFE70030);
       default:
-        return const Color(0xFFD95700); // Medium
+        return const Color(0xFFD95700);
     }
   }
 
@@ -34,14 +32,13 @@ class _TaskBreakdownPageState extends State<TaskBreakdownPage> {
       case 'High':
         return const Color(0xFFFEE2E2);
       default:
-        return const Color(0xFFFFEFDA); // Medium
+        return const Color(0xFFFFEFDA);
     }
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // ── CHANGED: read assignmentId from route arguments ──
     if (_assignmentId.isEmpty) {
       final args =
           ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
@@ -50,7 +47,6 @@ class _TaskBreakdownPageState extends State<TaskBreakdownPage> {
     }
   }
 
-  // ── CHANGED: load tasks from API instead of hardcoded list ──
   Future<void> _loadTasks() async {
     setState(() => _isLoading = true);
     final tasks = await GroupApi.getTaskBreakdown(_assignmentId);
@@ -60,7 +56,6 @@ class _TaskBreakdownPageState extends State<TaskBreakdownPage> {
     });
   }
 
-  // ── CHANGED: regenerate calls API and reloads ──
   Future<void> _regenerateTasks() async {
     setState(() => _isLoading = true);
     final tasks = await GroupApi.regenerateTasks(_assignmentId);
@@ -70,31 +65,13 @@ class _TaskBreakdownPageState extends State<TaskBreakdownPage> {
     });
   }
 
-  BoxDecoration get _cardDecoration => BoxDecoration(
-    color: const Color(0xFFFFFFFF),
-    borderRadius: BorderRadius.circular(14),
-    boxShadow: [
-      BoxShadow(
-        color: Colors.black.withOpacity(0.1),
-        blurRadius: 3,
-        offset: const Offset(0, 1),
-      ),
-      BoxShadow(
-        color: Colors.black.withOpacity(0.1),
-        blurRadius: 2,
-        offset: const Offset(0, 1),
-      ),
-    ],
-  );
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFFFF8F0),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFFFFFFF),
-        elevation: 1,
-        shadowColor: Colors.black.withOpacity(0.1),
+        backgroundColor: Colors.white,
+        elevation: 0,
         leading: IconButton(
           icon: const Icon(
             Icons.arrow_back,
@@ -107,16 +84,13 @@ class _TaskBreakdownPageState extends State<TaskBreakdownPage> {
         title: const Text(
           'AI Task Breakdown',
           style: TextStyle(
-            fontFamily: 'Arimo',
-            fontSize: 16,
-            height: 1.5,
-            color: Color(0xFF101828),
-            fontWeight: FontWeight.w400,
+            color: Colors.black87,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),
       body: _isLoading
-          // ── CHANGED: loading state ──
           ? const Center(
               child: CircularProgressIndicator(color: Color(0xFFAFBCDD)),
             )
@@ -125,6 +99,7 @@ class _TaskBreakdownPageState extends State<TaskBreakdownPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Info note
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -170,12 +145,22 @@ class _TaskBreakdownPageState extends State<TaskBreakdownPage> {
                   ),
                   const SizedBox(height: 16),
 
-                  // ── CHANGED: empty state when no tasks ──
+                  // Empty state
                   if (_tasks.isEmpty)
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(32),
-                      decoration: _cardDecoration,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFFFFF),
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 3,
+                            offset: const Offset(0, 1),
+                          ),
+                        ],
+                      ),
                       child: const Column(
                         children: [
                           Icon(
@@ -196,11 +181,11 @@ class _TaskBreakdownPageState extends State<TaskBreakdownPage> {
                       ),
                     )
                   else
-                    // ── CHANGED: render from API data ──
                     ..._tasks.map((task) => _buildTaskCard(task)),
 
                   const SizedBox(height: 8),
 
+                  // Action buttons
                   Row(
                     children: [
                       Expanded(
@@ -221,7 +206,6 @@ class _TaskBreakdownPageState extends State<TaskBreakdownPage> {
                             ],
                           ),
                           child: ElevatedButton(
-                            // ── CHANGED: pass assignmentId forward ──
                             onPressed: () => Navigator.pushNamed(
                               context,
                               '/task-distribution',
@@ -266,7 +250,6 @@ class _TaskBreakdownPageState extends State<TaskBreakdownPage> {
                             ],
                           ),
                           child: ElevatedButton(
-                            // ── CHANGED: calls regenerate API ──
                             onPressed: _regenerateTasks,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF9C9EC3),
@@ -329,7 +312,6 @@ class _TaskBreakdownPageState extends State<TaskBreakdownPage> {
     );
   }
 
-  // ── CHANGED: accepts GroupTask model instead of Map ──
   Widget _buildTaskCard(GroupTask task) {
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
