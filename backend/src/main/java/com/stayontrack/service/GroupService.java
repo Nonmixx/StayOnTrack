@@ -6,6 +6,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
@@ -65,6 +67,25 @@ public class GroupService {
             }
 
             List<Map<String, Object>> tasks = flattenTasksFromDistribution(distribution);
+            normalizeDependenciesWithTaskIds(tasks, distribution);
+
+            if (tasks.size() < 4) {
+                System.out.println("⚠️ createGroupAssignment generated only " + tasks.size() + " unique tasks. Retrying with extract+distribute fallback...");
+
+                List<Map<String, Object>> recoveredTasks = aiService.extractTasksAiOnly(brief, members);
+                List<Map<String, Object>> recoveredDistribution = aiService.distributeTasks(recoveredTasks, members);
+                List<Map<String, Object>> recoveredFlatTasks = flattenTasksFromDistribution(recoveredDistribution);
+                normalizeDependenciesWithTaskIds(recoveredFlatTasks, recoveredDistribution);
+
+                if (recoveredFlatTasks.size() > tasks.size()) {
+                    System.out.println("✅ Recovery produced " + recoveredFlatTasks.size() + " tasks. Using recovered result.");
+                    tasks = recoveredFlatTasks;
+                    distribution = recoveredDistribution;
+                } else {
+                    System.out.println("⚠️ Recovery did not improve task count. Keeping original result.");
+                }
+            }
+
             System.out.println("✅ Flattened " + tasks.size() + " tasks from mega-prompt distribution");
             if (tasks.isEmpty()) {
                 throw new RuntimeException("AI returned distribution but no tasks.");
@@ -118,6 +139,7 @@ public class GroupService {
                 .map(DocumentSnapshot::getData)
                 .collect(Collectors.toList());
             tasks.sort(Comparator.comparingInt(this::parseTaskId));
+            normalizeTaskDependenciesInPlace(tasks);
             return tasks;
         } catch (Exception e) {
             System.err.println("❌ getTasks error: " + e.getMessage());
@@ -140,6 +162,7 @@ public class GroupService {
             }
 
             List<Map<String, Object>> newTasks = flattenTasksFromDistribution(newDistribution);
+            normalizeDependenciesWithTaskIds(newTasks, newDistribution);
             for (Map<String, Object> task : newTasks) {
                 db.collection("groupTasks").document(assignmentId)
                     .collection("tasks").add(task).get();
@@ -160,9 +183,12 @@ public class GroupService {
                 .document(assignmentId)
                 .collection("assignments")
                 .get().get();
-            return snapshot.getDocuments().stream()
+            List<Map<String, Object>> distribution = snapshot.getDocuments().stream()
                 .map(DocumentSnapshot::getData)
                 .collect(Collectors.toList());
+            List<Map<String, Object>> tasks = getTasks(assignmentId);
+            normalizeDistributionDependenciesInPlace(distribution, tasks);
+            return distribution;
         } catch (Exception e) {
             System.err.println("❌ getDistribution error: " + e.getMessage());
             return Collections.emptyList();
@@ -176,6 +202,7 @@ public class GroupService {
             List<Map<String, Object>> members = getMembers(db, assignmentId);
             List<Map<String, Object>> distribution =
                 aiService.distributeTasks(tasks, members);
+            normalizeDistributionDependenciesInPlace(distribution, tasks);
             saveDistribution(db, assignmentId, distribution);
             return distribution;
         } catch (Exception e) {
@@ -226,6 +253,25 @@ public class GroupService {
             }
 
             List<Map<String, Object>> tasks = flattenTasksFromDistribution(distribution);
+            normalizeDependenciesWithTaskIds(tasks, distribution);
+
+            if (tasks.size() < 4) {
+                System.out.println("⚠️ updateGroupAssignment generated only " + tasks.size() + " unique tasks. Retrying with extract+distribute fallback...");
+
+                List<Map<String, Object>> recoveredTasks = aiService.extractTasksAiOnly(brief, members);
+                List<Map<String, Object>> recoveredDistribution = aiService.distributeTasks(recoveredTasks, members);
+                List<Map<String, Object>> recoveredFlatTasks = flattenTasksFromDistribution(recoveredDistribution);
+                normalizeDependenciesWithTaskIds(recoveredFlatTasks, recoveredDistribution);
+
+                if (recoveredFlatTasks.size() > tasks.size()) {
+                    System.out.println("✅ Recovery produced " + recoveredFlatTasks.size() + " tasks. Using recovered result.");
+                    tasks = recoveredFlatTasks;
+                    distribution = recoveredDistribution;
+                } else {
+                    System.out.println("⚠️ Recovery did not improve task count. Keeping original result.");
+                }
+            }
+
             if (tasks.isEmpty()) {
                 System.err.println("❌ AI service returned distribution but no tasks");
                 throw new RuntimeException("AI generation failed - no tasks generated");
@@ -389,5 +435,176 @@ public class GroupService {
             }
         }
         return Integer.MAX_VALUE;
+    }
+
+    private void normalizeDependenciesWithTaskIds(List<Map<String, Object>> tasks,
+                                                  List<Map<String, Object>> distribution) {
+        normalizeTaskDependenciesInPlace(tasks);
+        normalizeDistributionDependenciesInPlace(distribution, tasks);
+    }
+
+    private void normalizeTaskDependenciesInPlace(List<Map<String, Object>> tasks) {
+        if (tasks == null || tasks.isEmpty()) return;
+        Map<String, Integer> titleToId = buildTaskTitleToIdMap(tasks);
+        Set<Integer> validIds = new HashSet<>(titleToId.values());
+
+        for (Map<String, Object> task : tasks) {
+            Integer currentTaskId = safeTaskId(task);
+            Object normalized = normalizeDependenciesValue(task.get("dependencies"), titleToId, validIds, currentTaskId);
+            task.put("dependencies", normalized);
+        }
+    }
+
+    private void normalizeDistributionDependenciesInPlace(List<Map<String, Object>> distribution,
+                                                          List<Map<String, Object>> tasks) {
+        if (distribution == null || distribution.isEmpty()) return;
+        Map<String, Integer> titleToId = buildTaskTitleToIdMap(tasks);
+        Set<Integer> validIds = new HashSet<>(titleToId.values());
+
+        for (Map<String, Object> member : distribution) {
+            Object tasksRaw = member.get("tasks");
+            if (!(tasksRaw instanceof List<?> memberTasks)) continue;
+
+            for (Object item : memberTasks) {
+                if (!(item instanceof Map<?, ?> map)) continue;
+                @SuppressWarnings("unchecked")
+                Map<String, Object> memberTask = (Map<String, Object>) map;
+                Integer currentTaskId = safeTaskId(memberTask);
+                if (currentTaskId == null) {
+                    Object titleRaw = memberTask.get("title");
+                    String title = titleRaw == null ? "" : String.valueOf(titleRaw).trim().toLowerCase(Locale.ROOT);
+                    currentTaskId = titleToId.get(title);
+                    if (currentTaskId == null && !title.isEmpty()) {
+                        currentTaskId = titleToId.get(normalizeKey(title));
+                    }
+                }
+
+                Object normalized = normalizeDependenciesValue(
+                    memberTask.get("dependencies"),
+                    titleToId,
+                    validIds,
+                    currentTaskId
+                );
+                memberTask.put("dependencies", normalized);
+            }
+        }
+    }
+
+    private Map<String, Integer> buildTaskTitleToIdMap(List<Map<String, Object>> tasks) {
+        Map<String, Integer> titleToId = new HashMap<>();
+        if (tasks == null) return titleToId;
+
+        for (Map<String, Object> task : tasks) {
+            int id = parseTaskId(task);
+            if (id == Integer.MAX_VALUE) continue;
+            String title = task.get("title") == null ? "" : String.valueOf(task.get("title")).trim().toLowerCase(Locale.ROOT);
+            if (!title.isEmpty()) {
+                titleToId.put(title, id);
+                String normalizedTitle = normalizeKey(title);
+                if (!normalizedTitle.isEmpty()) {
+                    titleToId.put(normalizedTitle, id);
+                }
+            }
+        }
+        return titleToId;
+    }
+
+    private Object normalizeDependenciesValue(Object rawDependencies,
+                                              Map<String, Integer> titleToId,
+                                              Set<Integer> validIds,
+                                              Integer currentTaskId) {
+        if (rawDependencies == null) return null;
+
+        String raw = String.valueOf(rawDependencies).trim();
+        if (raw.isEmpty() || raw.equalsIgnoreCase("null") || raw.equalsIgnoreCase("none")) {
+            return null;
+        }
+
+        List<String> normalizedTokens = new ArrayList<>();
+        for (String token : raw.split(",")) {
+            String normalized = normalizeDependencyToken(token, titleToId, validIds, currentTaskId);
+            if (normalized != null && !normalized.isBlank()) {
+                normalizedTokens.add(normalized);
+            }
+        }
+
+        if (normalizedTokens.isEmpty()) return null;
+        return String.join(",", normalizedTokens);
+    }
+
+    private String normalizeDependencyToken(String token,
+                                            Map<String, Integer> titleToId,
+                                            Set<Integer> validIds,
+                                            Integer currentTaskId) {
+        String trimmed = token == null ? "" : token.trim();
+        if (trimmed.isEmpty()) return null;
+
+        Integer parsed = parseInteger(trimmed);
+        if (parsed == null && trimmed.toLowerCase(Locale.ROOT).startsWith("task ")) {
+            parsed = parseInteger(trimmed.substring(5).trim());
+        }
+        if (parsed == null) {
+            parsed = extractFirstPositiveInteger(trimmed);
+        }
+
+        if (parsed != null) {
+            if (parsed <= 0) return null;
+            if (validIds != null && !validIds.isEmpty() && !validIds.contains(parsed)) return null;
+            if (currentTaskId != null && currentTaskId.equals(parsed)) return null;
+            return String.valueOf(parsed);
+        }
+
+        Integer mapped = titleToId.get(trimmed.toLowerCase(Locale.ROOT));
+        if (mapped != null && mapped > 0) {
+            return String.valueOf(mapped);
+        }
+
+        String normalizedToken = normalizeKey(trimmed);
+        if (!normalizedToken.isEmpty()) {
+            Integer normalizedMapped = titleToId.get(normalizedToken);
+            if (normalizedMapped != null && normalizedMapped > 0) {
+                return String.valueOf(normalizedMapped);
+            }
+
+            for (Map.Entry<String, Integer> entry : titleToId.entrySet()) {
+                String key = entry.getKey();
+                if (key.isEmpty()) continue;
+                if (normalizedToken.contains(key) || key.contains(normalizedToken)) {
+                    Integer candidate = entry.getValue();
+                    if (candidate != null && candidate > 0) {
+                        if (validIds == null || validIds.isEmpty() || validIds.contains(candidate)) {
+                            return String.valueOf(candidate);
+                        }
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private Integer safeTaskId(Map<String, Object> task) {
+        int id = parseTaskId(task);
+        return id == Integer.MAX_VALUE ? null : id;
+    }
+
+    private String normalizeKey(String text) {
+        if (text == null) return "";
+        return text.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
+    }
+
+    private Integer extractFirstPositiveInteger(String text) {
+        if (text == null) return null;
+        Matcher matcher = Pattern.compile("(\\d+)").matcher(text);
+        if (!matcher.find()) return null;
+        return parseInteger(matcher.group(1));
+    }
+
+    private Integer parseInteger(String value) {
+        try {
+            return Integer.parseInt(value);
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 }

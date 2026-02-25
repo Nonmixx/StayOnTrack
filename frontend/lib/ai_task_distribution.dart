@@ -67,14 +67,71 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
     }
   }
 
-  String _formatDependencies(String? depStr) {
-    if (depStr == null || depStr.isEmpty) return 'None';
-    try {
-      final depId = int.parse(depStr);
-      return 'Task $depId';
-    } catch (_) {
-      return depStr;
+  String _formatDependencies(String? depStr, {int? currentTaskId}) {
+    if (depStr == null || depStr.trim().isEmpty) return 'None';
+
+    final idByTitle = <String, int>{
+      for (final task in _allTasks) task.title.trim().toLowerCase(): task.id,
+      for (final task in _allTasks)
+        _normalizeDependencyKey(task.title): task.id,
+    };
+    final segments = depStr
+        .split(',')
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .toList();
+
+    if (segments.isEmpty) return 'None';
+
+    final formatted = <String>[];
+    for (final segment in segments) {
+      int? depId = int.tryParse(segment);
+      depId ??= _extractFirstPositiveInt(segment);
+      if (depId != null) {
+        if (currentTaskId == null || depId != currentTaskId) {
+          formatted.add('Task $depId');
+        }
+        continue;
+      }
+
+      final lower = segment.toLowerCase();
+      final normalized = _normalizeDependencyKey(segment);
+      final mappedId = idByTitle[lower] ?? idByTitle[normalized];
+      if (mappedId != null) {
+        if (currentTaskId == null || mappedId != currentTaskId) {
+          formatted.add('Task $mappedId');
+        }
+        continue;
+      }
+
+      if (normalized.isNotEmpty) {
+        for (final entry in idByTitle.entries) {
+          final key = entry.key;
+          if (key.isEmpty) continue;
+          if (normalized.contains(key) || key.contains(normalized)) {
+            if (currentTaskId == null || entry.value != currentTaskId) {
+              formatted.add('Task ${entry.value}');
+            }
+            break;
+          }
+        }
+      }
     }
+
+    if (formatted.isEmpty) return 'None';
+    return formatted.join(', ');
+  }
+
+  String _normalizeDependencyKey(String value) {
+    return value.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+  }
+
+  int? _extractFirstPositiveInt(String value) {
+    final match = RegExp(r'(\d+)').firstMatch(value);
+    if (match == null) return null;
+    final parsed = int.tryParse(match.group(1)!);
+    if (parsed == null || parsed <= 0) return null;
+    return parsed;
   }
 
   int _memberNameSortKey(String name) {
@@ -1241,7 +1298,10 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
                     ),
                   ),
                   child: Text(
-                    _formatDependencies(task.dependencies),
+                    _formatDependencies(
+                      task.dependencies,
+                      currentTaskId: taskId > 0 ? taskId : null,
+                    ),
                     style: const TextStyle(
                       fontFamily: 'Arimo',
                       fontSize: 12,
