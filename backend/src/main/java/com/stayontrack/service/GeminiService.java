@@ -78,8 +78,9 @@ public class GeminiService {
                 prompt.append("User feedback: ").append(feedback).append(". ");
             }
             if (!deadlines.isEmpty()) {
-                prompt.append("Create study tasks for ALL items. Schedule 2-3 sessions per item per week, spread across DIFFERENT days. ");
-                prompt.append("NEVER put the same item twice on the same day - max 1 session per item per day. Max 5 sessions per day total (can exceed when deadline is imminent). ");
+                prompt.append("Create study tasks for ALL items. Include every deadline and exam. ");
+                prompt.append("STRICT: NEVER schedule the same item twice on the same day - each item max 1 session per day. Max 5 sessions per day. ");
+                prompt.append("Exams ~3x/week, assignments ~2x/week across different days (flexible - all items must be included). ");
                 prompt.append("Items: ");
                 for (Deadline d : deadlines) {
                     String due = d.getDueDate() != null ? d.getDueDate().format(DateTimeFormatter.ISO_LOCAL_DATE) : "?";

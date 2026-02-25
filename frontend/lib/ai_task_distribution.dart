@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'api/group_api.dart';
 
 /// Page 6.4 - AI Task Distribution
-// ── CHANGED: StatefulWidget to support dynamic loading ──
 class TaskDistributionPage extends StatefulWidget {
   const TaskDistributionPage({Key? key}) : super(key: key);
 
@@ -12,8 +11,12 @@ class TaskDistributionPage extends StatefulWidget {
 
 class _TaskDistributionPageState extends State<TaskDistributionPage> {
   List<MemberDistribution> _distributions = [];
+  List<GroupTask> _allTasks = [];
   bool _isLoading = true;
+  bool _isRegenerating = false;
+  bool _isDeletingAssignment = false;
   String _assignmentId = '';
+  Map<String, dynamic>? _assignmentSetup;
 
   Color _effortColor(String effort) {
     switch (effort) {
@@ -37,10 +40,109 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
     }
   }
 
+  String _formatDeadline(dynamic deadline) {
+    if (deadline == null) return 'No deadline';
+    try {
+      final date = deadline is String
+          ? DateTime.parse(deadline)
+          : deadline as DateTime;
+      final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      final months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
+      ];
+      return 'Due ${days[date.weekday - 1]}, ${date.day} ${months[date.month - 1]}';
+    } catch (_) {
+      return 'No deadline';
+    }
+  }
+
+  String _formatDependencies(String? depStr, {int? currentTaskId}) {
+    if (depStr == null || depStr.trim().isEmpty) return 'None';
+
+    final idByTitle = <String, int>{
+      for (final task in _allTasks) task.title.trim().toLowerCase(): task.id,
+      for (final task in _allTasks)
+        _normalizeDependencyKey(task.title): task.id,
+    };
+    final segments = depStr
+        .split(',')
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .toList();
+
+    if (segments.isEmpty) return 'None';
+
+    final formatted = <String>[];
+    for (final segment in segments) {
+      int? depId = int.tryParse(segment);
+      depId ??= _extractFirstPositiveInt(segment);
+      if (depId != null) {
+        if (currentTaskId == null || depId != currentTaskId) {
+          formatted.add('Task $depId');
+        }
+        continue;
+      }
+
+      final lower = segment.toLowerCase();
+      final normalized = _normalizeDependencyKey(segment);
+      final mappedId = idByTitle[lower] ?? idByTitle[normalized];
+      if (mappedId != null) {
+        if (currentTaskId == null || mappedId != currentTaskId) {
+          formatted.add('Task $mappedId');
+        }
+        continue;
+      }
+
+      if (normalized.isNotEmpty) {
+        for (final entry in idByTitle.entries) {
+          final key = entry.key;
+          if (key.isEmpty) continue;
+          if (normalized.contains(key) || key.contains(normalized)) {
+            if (currentTaskId == null || entry.value != currentTaskId) {
+              formatted.add('Task ${entry.value}');
+            }
+            break;
+          }
+        }
+      }
+    }
+
+    if (formatted.isEmpty) return 'None';
+    return formatted.join(', ');
+  }
+
+  String _normalizeDependencyKey(String value) {
+    return value.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+  }
+
+  int? _extractFirstPositiveInt(String value) {
+    final match = RegExp(r'(\d+)').firstMatch(value);
+    if (match == null) return null;
+    final parsed = int.tryParse(match.group(1)!);
+    if (parsed == null || parsed <= 0) return null;
+    return parsed;
+  }
+
+  int _memberNameSortKey(String name) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return 123;
+    return trimmed.toUpperCase().codeUnitAt(0);
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // ── CHANGED: read assignmentId from route arguments ──
     if (_assignmentId.isEmpty) {
       final args =
           ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
@@ -49,31 +151,333 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
     }
   }
 
-  // ── CHANGED: load distribution from API ──
+  Future<String> _resolveAssignmentIdIfMissing() async {
+    if (_assignmentId.isNotEmpty) return _assignmentId;
+
+    final assignments = await GroupApi.getGroupAssignments();
+    if (assignments.isEmpty) return '';
+
+    assignments.sort((a, b) {
+      DateTime parseOrMax(String raw) {
+        try {
+          return DateTime.parse(raw);
+        } catch (_) {
+          return DateTime(9999, 12, 31, 23, 59, 59);
+        }
+      }
+
+      return parseOrMax(a.deadline).compareTo(parseOrMax(b.deadline));
+    });
+
+    return assignments.first.id;
+  }
+
   Future<void> _loadDistribution() async {
     setState(() => _isLoading = true);
-    final data = await GroupApi.getTaskDistribution(_assignmentId);
-    setState(() {
-      _distributions = data;
-      _isLoading = false;
-    });
+    try {
+      _assignmentId = await _resolveAssignmentIdIfMissing();
+      if (_assignmentId.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No assignment found. Please create one first.'),
+            backgroundColor: Color(0xFFE70030),
+          ),
+        );
+        setState(() {
+          _distributions = [];
+          _allTasks = [];
+          _assignmentSetup = null;
+        });
+        return;
+      }
+
+      final [distributions, tasks, setup] = await Future.wait<dynamic>([
+        GroupApi.getTaskDistribution(_assignmentId),
+        GroupApi.getTaskBreakdown(_assignmentId),
+        GroupApi.getAssignmentSetup(_assignmentId),
+      ]).timeout(const Duration(seconds: 90));
+
+      final sortedDistributions = (distributions as List<MemberDistribution>)
+        ..sort((a, b) {
+          final keyCmp = _memberNameSortKey(
+            a.name,
+          ).compareTo(_memberNameSortKey(b.name));
+          if (keyCmp != 0) return keyCmp;
+          return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+        });
+
+      if (!mounted) return;
+      setState(() {
+        _distributions = sortedDistributions;
+        _allTasks = tasks as List<GroupTask>;
+        _assignmentSetup = setup as Map<String, dynamic>?;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to load distribution: $e'),
+          backgroundColor: const Color(0xFFE70030),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
-  // ── CHANGED: regenerate calls API and reloads ──
   Future<void> _regenerateDistribution() async {
-    setState(() => _isLoading = true);
-    final data = await GroupApi.regenerateDistribution(_assignmentId);
-    setState(() {
-      _distributions = data;
-      _isLoading = false;
-    });
+    if (_isRegenerating) return;
+    setState(() => _isRegenerating = true);
+    try {
+      final data = await GroupApi.regenerateDistribution(
+        _assignmentId,
+      ).timeout(const Duration(seconds: 35));
+      if (!mounted) return;
+
+      if (data.isEmpty) {
+        final errorMessage =
+            lastRegenerateDistributionError ??
+            'Failed to regenerate distribution. Please try again.';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Color(0xFFE70030),
+          ),
+        );
+        return;
+      }
+
+      data.sort((a, b) {
+        final keyCmp = _memberNameSortKey(
+          a.name,
+        ).compareTo(_memberNameSortKey(b.name));
+        if (keyCmp != 0) return keyCmp;
+        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      });
+
+      setState(() {
+        _distributions = data;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Distribution regenerated.'),
+          backgroundColor: Color(0xFF008236),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to regenerate distribution. Please try again.'),
+          backgroundColor: Color(0xFFE70030),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isRegenerating = false);
+      }
+    }
   }
 
-  // ── CHANGED: confirm calls API then navigates home ──
   Future<void> _confirmDistribution() async {
-    final success = await GroupApi.confirmDistribution(_assignmentId);
-    if (success && mounted) {
-      Navigator.popUntil(context, (route) => route.isFirst);
+    print('🔄 _confirmDistribution called');
+
+    // Show loading dialog
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const AlertDialog(
+        backgroundColor: Color(0xFFFFFFFF),
+        content: SizedBox(
+          height: 80,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Confirming distribution...'),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    try {
+      print('📤 Calling GroupApi.confirmDistribution($_assignmentId)');
+      final success = await GroupApi.confirmDistribution(_assignmentId);
+      print('📥 confirmDistribution returned: $success');
+
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+
+      if (success) {
+        print('✅ Confirmed successfully. Navigating to group overview...');
+        // Navigate back to group overview
+        Navigator.of(context).popUntil(
+          (route) => route.settings.name == '/group-overview' || route.isFirst,
+        );
+      } else {
+        print('❌ confirmDistribution failed');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to confirm distribution'),
+            backgroundColor: Color(0xFFE70030),
+          ),
+        );
+      }
+    } catch (e) {
+      print('❌ Exception in confirmDistribution: $e');
+      if (mounted) {
+        Navigator.pop(context); // Close loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: const Color(0xFFE70030),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _confirmDelete(BuildContext context) async {
+    if (_isDeletingAssignment) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFFFFFFFF),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEE2E2),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.delete_outline,
+                color: Color(0xFFE70030),
+                size: 22,
+              ),
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              'Delete Assignment',
+              style: TextStyle(
+                fontFamily: 'Arimo',
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF101828),
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Are you sure you want to delete this assignment? This action cannot be undone.',
+              style: TextStyle(
+                fontFamily: 'Arimo',
+                fontSize: 13,
+                color: Color(0xFF6A7282),
+                height: 1.5,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF4A5565),
+                    side: const BorderSide(color: Color(0xFFE7E6EB)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(
+                      fontFamily: 'Arimo',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFE70030),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text(
+                    'Delete',
+                    style: TextStyle(
+                      fontFamily: 'Arimo',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      setState(() => _isDeletingAssignment = true);
+
+      try {
+        final success = await GroupApi.deleteGroupAssignment(_assignmentId);
+        if (mounted) {
+          if (success) {
+            Navigator.popUntil(context, (route) => route.isFirst);
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Failed to delete assignment'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error deleting assignment: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isDeletingAssignment = false);
+        }
+      }
     }
   }
 
@@ -82,9 +486,8 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFFFF8F0),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFFFFFFF),
-        elevation: 1,
-        shadowColor: Colors.black.withOpacity(0.1),
+        backgroundColor: Colors.white,
+        elevation: 0,
         leading: IconButton(
           icon: const Icon(
             Icons.arrow_back,
@@ -93,20 +496,24 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
           ),
           onPressed: () => Navigator.pop(context),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: Color(0xFF2D2D3A), size: 22),
+            onPressed: _isLoading ? null : _loadDistribution,
+            tooltip: 'Refresh',
+          ),
+        ],
         centerTitle: true,
         title: const Text(
           'AI Task Distribution',
           style: TextStyle(
-            fontFamily: 'Arimo',
-            fontSize: 16,
-            height: 1.5,
-            color: Color(0xFF101828),
-            fontWeight: FontWeight.w400,
+            color: Colors.black87,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),
       body: _isLoading
-          // ── CHANGED: loading state ──
           ? const Center(
               child: CircularProgressIndicator(color: Color(0xFFAFBCDD)),
             )
@@ -116,8 +523,7 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Header gradient card — unchanged, still hardcoded display
-                    // (backend should return assignment metadata; for now kept as-is)
+                    // Header gradient card
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
@@ -148,28 +554,66 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               const SizedBox.shrink(),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 3,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFDBFCE7),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: const Text(
-                                  'On track',
-                                  style: TextStyle(
-                                    fontFamily: 'Arimo',
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF008236),
+                              GestureDetector(
+                                onTap: _isDeletingAssignment
+                                    ? null
+                                    : () => _confirmDelete(context),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 9,
+                                    vertical: 5,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFEE2E2),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: const Color(
+                                        0xFFE70030,
+                                      ).withOpacity(0.2),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (_isDeletingAssignment)
+                                        const SizedBox(
+                                          width: 12,
+                                          height: 12,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            valueColor:
+                                                AlwaysStoppedAnimation<Color>(
+                                                  Color(0xFFE70030),
+                                                ),
+                                          ),
+                                        )
+                                      else
+                                        const Icon(
+                                          Icons.delete_outline,
+                                          size: 13,
+                                          color: Color(0xFFE70030),
+                                        ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        _isDeletingAssignment
+                                            ? 'Deleting...'
+                                            : 'Delete',
+                                        style: const TextStyle(
+                                          fontFamily: 'Arimo',
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFFE70030),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
                             ],
                           ),
                           const SizedBox(height: 6),
+
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 8,
@@ -179,9 +623,11 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
                               color: const Color(0xFFEFF6FF).withOpacity(0.5),
                               borderRadius: BorderRadius.circular(6),
                             ),
-                            child: const Text(
-                              'MKT305',
-                              style: TextStyle(
+                            child: Text(
+                              _assignmentSetup?['courseCode'] ??
+                                  _assignmentSetup?['courseName'] ??
+                                  'Course',
+                              style: const TextStyle(
                                 fontFamily: 'Arimo',
                                 fontSize: 12,
                                 color: Color(0xFF2D4A7A),
@@ -190,17 +636,22 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
                             ),
                           ),
                           const SizedBox(height: 8),
-                          const Text(
-                            'Marketing Strategy Deck',
-                            style: TextStyle(
+
+                          Text(
+                            _assignmentSetup?['assignmentTitle'] ??
+                                'Assignment',
+                            style: const TextStyle(
                               fontFamily: 'Arimo',
                               fontSize: 28,
                               fontWeight: FontWeight.w700,
                               color: Color(0xFF101828),
                               height: 1.2,
                             ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 10),
+
                           Row(
                             children: [
                               const Text(
@@ -222,19 +673,22 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
                                   color: Colors.white.withOpacity(0.85),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
-                                child: const Text(
-                                  'MarketMinds',
-                                  style: TextStyle(
+                                child: Text(
+                                  _assignmentSetup?['groupName'] ?? 'Group',
+                                  style: const TextStyle(
                                     fontFamily: 'Arimo',
                                     fontSize: 12,
                                     color: Color(0xFF64709B),
                                     fontWeight: FontWeight.w600,
                                   ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                             ],
                           ),
                           const SizedBox(height: 10),
+
                           Row(
                             mainAxisAlignment: MainAxisAlignment.end,
                             children: [
@@ -248,16 +702,18 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Row(
-                                  children: const [
-                                    Icon(
+                                  children: [
+                                    const Icon(
                                       Icons.calendar_today_outlined,
                                       size: 12,
                                       color: Color(0xFF364153),
                                     ),
-                                    SizedBox(width: 5),
+                                    const SizedBox(width: 5),
                                     Text(
-                                      'Due Wed, 15 Nov',
-                                      style: TextStyle(
+                                      _formatDeadline(
+                                        _assignmentSetup?['deadline'],
+                                      ),
+                                      style: const TextStyle(
                                         fontFamily: 'Arimo',
                                         fontSize: 12,
                                         color: Color(0xFF364153),
@@ -285,7 +741,6 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
                                       color: Color(0xFF364153),
                                     ),
                                     const SizedBox(width: 5),
-                                    // ── CHANGED: show real task count ──
                                     Text(
                                       '${_distributions.fold(0, (sum, m) => sum + m.taskCount)} Tasks Total',
                                       style: const TextStyle(
@@ -319,7 +774,6 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
                           ),
                         ),
                         InkWell(
-                          // ── CHANGED: pass assignmentId to edit setup ──
                           onTap: () => Navigator.pushNamed(
                             context,
                             '/edit-setup',
@@ -373,7 +827,6 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
 
                     const SizedBox(height: 12),
 
-                    // ── CHANGED: empty state when no distributions ──
                     if (_distributions.isEmpty)
                       Container(
                         width: double.infinity,
@@ -409,7 +862,6 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
                         ),
                       )
                     else
-                      // ── CHANGED: render from API data ──
                       ..._distributions.map(
                         (member) => _buildMemberSection(member),
                       ),
@@ -420,7 +872,6 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
                       children: [
                         Expanded(
                           child: ElevatedButton(
-                            // ── CHANGED: calls confirm API ──
                             onPressed: _confirmDistribution,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFFC8CEDF),
@@ -444,30 +895,41 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: ElevatedButton(
-                            // ── CHANGED: calls regenerate API ──
-                            onPressed: _regenerateDistribution,
+                            onPressed: _isRegenerating
+                                ? null
+                                : _regenerateDistribution,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF9C9EC3),
                               foregroundColor: const Color(0xFFFFFFFF),
+                              disabledBackgroundColor: const Color(0xFFD4D6E8),
+                              disabledForegroundColor: const Color(0xFFFFFFFF),
                               elevation: 0,
                               padding: const EdgeInsets.symmetric(vertical: 14),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8),
                               ),
                             ),
-                            child: const Text(
-                              'Regenerate Distribution',
-                              style: TextStyle(
-                                fontFamily: 'Arimo',
-                                fontSize: 13,
-                                fontWeight: FontWeight.w400,
-                              ),
-                            ),
+                            child: _isRegenerating
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Text(
+                                    'Regenerate Distribution',
+                                    style: TextStyle(
+                                      fontFamily: 'Arimo',
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w400,
+                                    ),
+                                  ),
                           ),
                         ),
                       ],
                     ),
-
                     const SizedBox(height: 16),
                   ],
                 ),
@@ -507,7 +969,6 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
     );
   }
 
-  // ── CHANGED: accepts MemberDistribution model instead of Map ──
   Widget _buildMemberSection(MemberDistribution member) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -672,8 +1133,18 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
     );
   }
 
-  // ── CHANGED: accepts MemberTask model instead of Map ──
   Widget _buildTaskCard(MemberTask task) {
+    final matchingTask = _allTasks.firstWhere(
+      (t) => t.title == task.title,
+      orElse: () => GroupTask(
+        id: 0,
+        title: task.title,
+        description: '',
+        effort: 'Medium',
+      ),
+    );
+    final taskId = matchingTask.id;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
@@ -703,9 +1174,31 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8ECFD),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFFD0D9EE), width: 1),
+                ),
+                child: Center(
+                  child: Text(
+                    '$taskId',
+                    style: const TextStyle(
+                      fontFamily: 'Arimo',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF6A82B0),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   task.title,
+                  // ── CHANGED: removed maxLines: 1 and overflow: ellipsis ──
                   style: const TextStyle(
                     fontFamily: 'Arimo',
                     fontSize: 15,
@@ -714,26 +1207,26 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: _effortBgColor(task.effort),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  task.effort,
-                  style: TextStyle(
-                    fontFamily: 'Arimo',
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: _effortColor(task.effort),
-                  ),
-                ),
-              ),
             ],
           ),
-          const SizedBox(height: 5),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: _effortBgColor(task.effort),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              task.effort,
+              style: TextStyle(
+                fontFamily: 'Arimo',
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: _effortColor(task.effort),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
 
           Text(
             task.description,
@@ -791,16 +1284,44 @@ class _TaskDistributionPageState extends State<TaskDistributionPage> {
                     fontWeight: FontWeight.w400,
                   ),
                 ),
-                Text(
-                  task.dependencies!,
-                  style: const TextStyle(
-                    fontFamily: 'Arimo',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF6A7282),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFF3FB),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: const Color(0xFFD0D9EE),
+                      width: 1,
+                    ),
+                  ),
+                  child: Text(
+                    _formatDependencies(
+                      task.dependencies,
+                      currentTaskId: taskId > 0 ? taskId : null,
+                    ),
+                    style: const TextStyle(
+                      fontFamily: 'Arimo',
+                      fontSize: 12,
+                      color: Color(0xFF6A82B0),
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ],
+            ),
+          ] else ...[
+            const SizedBox(height: 8),
+            const Text(
+              'Depends on: None',
+              style: TextStyle(
+                fontFamily: 'Arimo',
+                fontSize: 12,
+                color: Color(0xFF99A1AF),
+                fontWeight: FontWeight.w400,
+              ),
             ),
           ],
         ],

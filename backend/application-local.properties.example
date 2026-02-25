@@ -1,0 +1,10 @@
+# Copy this file to application-local.properties (gitignored) and fill your real key
+# Example:
+# spring.ai.google.api-key=AIza...your-real-key
+
+spring.ai.google.api-key=PUT_YOUR_REAL_KEY_HERE
+firebase.api.key=PUT_YOUR_FIREBASE_WEB_API_KEY_HERE
+
+# Optional: if using Vertex AI with Google Cloud service account
+# spring.ai.vertex.project-id=your-gcp-project-id
+# spring.ai.vertex.location=us-central1
