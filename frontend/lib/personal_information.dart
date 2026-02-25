@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'api/planner_api.dart' show baseUrl;
 import 'user_session.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -33,10 +34,6 @@ class _ProfilePageState extends State<ProfilePage> {
   String? _passwordError;
   bool _isUpdating = false;
 
-  // Flutter Web       → http://localhost:9091
-  // Android emulator  → http://10.0.2.2:9091
-  // Physical device   → http://<your-local-IP>:9091
-  static const String _baseUrl = 'http://localhost:9091';
 
   final ImagePicker _picker = ImagePicker();
 
@@ -153,7 +150,7 @@ class _ProfilePageState extends State<ProfilePage> {
       }
 
       final response = await http.patch(
-        Uri.parse('$_baseUrl/api/user/update'),
+        Uri.parse('$baseUrl/api/user/update'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer ${UserSession.idToken}',
@@ -293,21 +290,16 @@ class _ProfilePageState extends State<ProfilePage> {
 
       appBar: AppBar(
         backgroundColor: Colors.white,
-        elevation: 0.5,
-        leading: GestureDetector(
-          onTap: () => Navigator.pop(context),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(width: 8),
-              const Icon(Icons.arrow_back_ios, color: Colors.black, size: 18),
-              Text('Back', style: _arimo(16)),
-            ],
-          ),
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          onPressed: () => Navigator.pop(context),
         ),
-        leadingWidth: 90,
-        title: Text('Personal Information', style: _arimo(16)),
         centerTitle: true,
+        title: const Text(
+          'Personal Information',
+          style: TextStyle(color: Colors.black87, fontSize: 18, fontWeight: FontWeight.w600),
+        ),
       ),
 
       bottomNavigationBar: BottomNavigationBar(

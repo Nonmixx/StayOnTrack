@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
+import 'api/planner_api.dart' show baseUrl;
 import 'login.dart';
 
 class SignUpPage extends StatefulWidget {
@@ -26,10 +27,6 @@ class _SignUpPageState extends State<SignUpPage> {
   String? _termsError;
   String? _serverError;
 
-  // Flutter Web       → http://localhost:9091
-  // Android emulator  → http://10.0.2.2:9091
-  // Physical device   → http://<your-local-IP>:9091
-  static const String _baseUrl = 'http://localhost:9091';
 
   @override
   void dispose() {
@@ -92,7 +89,7 @@ class _SignUpPageState extends State<SignUpPage> {
 
     try {
       final response = await http.post(
-        Uri.parse('$_baseUrl/api/auth/register'),
+        Uri.parse('$baseUrl/api/auth/register'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'username': _usernameController.text.trim(),

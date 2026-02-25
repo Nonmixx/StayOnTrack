@@ -76,7 +76,7 @@ public class PlannerEngineService {
 
         LocalDate weekStart = planStart;
         List<PlannerWeek> created = new ArrayList<>();
-        int maxWeeks = 6;  // Limit to 6 weeks to avoid timeout; ensures setup tasks are included
+        int maxWeeks = 12;  // Cover full semester; ensures all assignments and exams are included
         int weekCount = 0;
         while (!weekStart.isAfter(planEnd) && weekCount < maxWeeks) {
             PlannerWeek existing = firestoreService.getPlannerWeekByDate(userId, weekStart);
@@ -266,7 +266,7 @@ public class PlannerEngineService {
                 }
             }
             fixOverlappingSessions(tasks);
-            ensureAllDeadlinesRepresented(tasks, relevantDeadlines, week, today);
+            ensureAllDeadlinesRepresented(tasks, relevantDeadlines, week, today, restDays);
             spreadTasksAcrossDays(tasks, week, today, restDays);
             moveTasksOutOfLowEnergyTimes(tasks, peakFocus, lowEnergy, week, today);
             insertBreaksBetweenSessions(tasks, typicalDuration);
@@ -276,32 +276,26 @@ public class PlannerEngineService {
         if (tasks.isEmpty() && !deadlines.isEmpty()) {
             LocalDate today = LocalDate.now();
             LocalDate currentWeekStart = getWeekStart(LocalDate.now());
-            int hoursPerDay = Math.max(1, availableHours / 7);
-            int dayIndex = 0;
+            List<LocalDate> availableDays = getAvailableDaysInWeek(week, today, restDays);
+            if (availableDays.isEmpty()) availableDays = List.of(today.plusDays(1));  // fallback to tomorrow
             Set<String> seen = new LinkedHashSet<>();
+            int dayIdx = 0;
             for (Deadline d : deadlines) {
                 if (d.getDueDate() == null) continue;
                 LocalDate deadlineWeekStart = getWeekStart(d.getDueDate());
                 if (weekStart.isAfter(deadlineWeekStart)
                         || weekStart.isBefore(deadlineWeekStart.minusWeeks(12))
                         || weekStart.isBefore(currentWeekStart)) continue;
-                if (restDays != null && dayIndex < 7) {
-                    String dayName = DAY_NAMES[dayIndex % 7];
-                    if (restDays.contains(dayName)) { dayIndex++; continue; }
-                }
-                LocalDate taskDate = weekStart.plusDays(dayIndex % 7);
-                if (taskDate.isBefore(today)) { dayIndex++; continue; }  // skip past dates
-                if (taskDate.isAfter(weekEnd)) taskDate = weekEnd;
                 String taskTitle = buildTaskTitle(d);
                 String duration = "1 hour";
-                int hours = 1;
-                if ("exam".equalsIgnoreCase(d.getType()) || "midterm".equalsIgnoreCase(d.getType()) || "final".equalsIgnoreCase(d.getType())) {
+                if (isExamDeadline(d)) {
                     duration = "2 hours";
-                    hours = 2;
                 }
+                LocalDate taskDate = availableDays.get(dayIdx % availableDays.size());
                 String dedupKey = taskTitle + "|" + d.getCourse() + "|" + taskDate;
-                if (seen.contains(dedupKey)) { dayIndex++; continue; }
+                if (seen.contains(dedupKey)) { dayIdx++; continue; }
                 seen.add(dedupKey);
+                dayIdx++;
                 LocalDateTime scheduledStart = taskDate.atTime(9, 0);
                 String diff;
                 Boolean ind;
@@ -315,7 +309,6 @@ public class PlannerEngineService {
                 }
                 PlannerTask task = new PlannerTask(week.getId(), week.getUserId(), taskTitle, d.getCourse(), duration, taskDate, scheduledStart, diff, ind);
                 tasks.add(task);
-                dayIndex += (hours / Math.max(1, hoursPerDay)) + 1;
             }
             spreadTasksAcrossDays(tasks, week, LocalDate.now(), restDays);
             moveTasksOutOfLowEnergyTimes(tasks, peakFocus, lowEnergy, week, LocalDate.now());
@@ -543,14 +536,16 @@ public class PlannerEngineService {
 
     /**
      * Add a task for any relevant deadline that has no task yet.
+     * Uses available days in the week so ALL deadlines get a task.
      */
     private void ensureAllDeadlinesRepresented(List<PlannerTask> tasks, List<Deadline> relevantDeadlines,
-            PlannerWeek week, LocalDate today) {
+            PlannerWeek week, LocalDate today, List<String> restDays) {
         if (relevantDeadlines == null || relevantDeadlines.isEmpty()) return;
-        LocalDate weekStart = week.getWeekStartDate();
-        LocalDate weekEnd = week.getWeekEndDate();
-        int nextHour = 9;
-        int nextDay = 0;
+        List<LocalDate> availableDays = getAvailableDaysInWeek(week, today, restDays);
+        if (availableDays.isEmpty()) availableDays = List.of(today);
+        Map<LocalDate, Integer> nextHourByDate = new LinkedHashMap<>();
+        for (LocalDate d : availableDays) nextHourByDate.put(d, 9);
+        int dayIdx = 0;
         for (Deadline d : relevantDeadlines) {
             String dTitle = d.getTitle() != null ? d.getTitle() : "";
             boolean covered = false;
@@ -564,13 +559,17 @@ public class PlannerEngineService {
             if (covered) continue;
             String taskTitle = buildTaskTitle(d);
             String duration = "1 hour";
-            if ("exam".equalsIgnoreCase(d.getType()) || "midterm".equalsIgnoreCase(d.getType()) || "final".equalsIgnoreCase(d.getType())) {
+            if (isExamDeadline(d)) {
                 duration = "2 hours";
             }
-            LocalDate taskDate = weekStart.plusDays(nextDay % 7);
-            if (taskDate.isBefore(today)) { nextDay++; continue; }
-            if (taskDate.isAfter(weekEnd)) continue;
-            LocalDateTime scheduledStart = taskDate.atTime(Math.min(22, nextHour), 0);
+            LocalDate taskDate = availableDays.get(dayIdx % availableDays.size());
+            int hour = nextHourByDate.get(taskDate);
+            if (hour >= 21) {
+                dayIdx++;
+                taskDate = availableDays.get(dayIdx % availableDays.size());
+                hour = 9;
+            }
+            LocalDateTime scheduledStart = taskDate.atTime(Math.min(22, hour), 0);
             String diff;
             Boolean ind;
             if (isExamDeadline(d)) {
@@ -583,10 +582,25 @@ public class PlannerEngineService {
             }
             PlannerTask task = new PlannerTask(week.getId(), week.getUserId(), taskTitle, d.getCourse(), duration, taskDate, scheduledStart, diff, ind);
             tasks.add(task);
-            nextHour += 2;
-            if (nextHour >= 21) { nextHour = 9; nextDay++; }
+            nextHourByDate.put(taskDate, hour + 2);
         }
         fixOverlappingSessions(tasks);
+    }
+
+    /** Get week days that are >= today and not rest days. */
+    private List<LocalDate> getAvailableDaysInWeek(PlannerWeek week, LocalDate today, List<String> restDays) {
+        LocalDate weekStart = week.getWeekStartDate();
+        LocalDate weekEnd = week.getWeekEndDate();
+        List<LocalDate> out = new ArrayList<>();
+        for (LocalDate d = weekStart; !d.isAfter(weekEnd); d = d.plusDays(1)) {
+            if (d.isBefore(today)) continue;
+            if (restDays != null) {
+                String dayName = DAY_NAMES[d.getDayOfWeek().getValue() - 1];
+                if (restDays.contains(dayName)) continue;
+            }
+            out.add(d);
+        }
+        return out;
     }
 
 }

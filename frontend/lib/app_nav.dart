@@ -6,6 +6,10 @@ class AppNav {
   static void Function()? navigateToPlanner;
   static void Function()? navigateToGroup;
   static void Function()? navigateToSettings;
+  /// Called when returning from setup flow (Academic Details) so Home/Planner refresh.
+  static void Function()? onReturnFromSetup;
+  /// Called when plan is regenerated (e.g. after edit) so Today's tasks on Home update immediately.
+  static void Function()? onPlanRegenerated;
 
   static void goToSettings(BuildContext context) {
     Navigator.popUntil(context, (route) => route.isFirst);

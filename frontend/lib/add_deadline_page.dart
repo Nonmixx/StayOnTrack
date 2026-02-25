@@ -123,6 +123,7 @@ class _AddDeadlinePageState extends State<AddDeadlinePage> {
           deadlineStore.updateAt(widget.editIndex!, item);
         }
         await PlannerApi.generatePlan(availableHours: 20);
+        AppNav.onPlanRegenerated?.call();
         if (mounted) Navigator.of(context).pop();
       } else if (mounted) {
         _showErrorSnackBar('Failed to update. Please try again.');
@@ -161,7 +162,13 @@ class _AddDeadlinePageState extends State<AddDeadlinePage> {
         isIndividual: _isIndividual,
       );
       deadlineStore.add(item);
-      await PlannerApi.generatePlan(availableHours: 20);
+      final plan = await PlannerApi.generatePlan(availableHours: 20);
+      AppNav.onPlanRegenerated?.call();
+      if (plan == null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Plan saved but generation failed. Try opening Planner tab to retry.'), backgroundColor: Colors.orange),
+        );
+      }
       _showSuccessDialog();
     } else if (mounted) {
       _showErrorSnackBar('Failed to save. Is the backend running?');

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'api/planner_api.dart' show baseUrl;
 import 'singup.dart';
 import 'forgot_password.dart';
 import 'user_session.dart';
@@ -25,10 +26,6 @@ class _LoginPageState extends State<LoginPage> {
   String? _passwordError;
   String? _generalError;
 
-  // Flutter Web       → http://localhost:9091
-  // Android emulator  → http://10.0.2.2:9091
-  // Physical device   → http://<your-local-IP>:9091
-  static const String _baseUrl = 'http://localhost:9091';
 
   @override
   void dispose() {
@@ -57,7 +54,7 @@ class _LoginPageState extends State<LoginPage> {
 
     try {
       final response = await http.post(
-        Uri.parse('$_baseUrl/api/auth/login'),
+        Uri.parse('$baseUrl/api/auth/login'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'email': email, 'password': password}),
       );

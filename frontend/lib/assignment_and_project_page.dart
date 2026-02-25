@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'app_nav.dart';
 import 'routes.dart';
 import 'api/planner_api.dart';
 import 'data/deadline_store.dart';
@@ -121,7 +122,7 @@ class _AssignmentAndProjectPageState extends State<AssignmentAndProjectPage> {
       isIndividual: _isIndividual,
     );
     if (_editingIndex != null && entry.id != null && entry.id!.isNotEmpty) {
-      await PlannerApi.updateDeadline(
+      final updated = await PlannerApi.updateDeadline(
         id: entry.id!,
         title: name,
         course: course,
@@ -130,6 +131,22 @@ class _AssignmentAndProjectPageState extends State<AssignmentAndProjectPage> {
         difficulty: _selectedDifficulty ?? 'Medium',
         isIndividual: _isIndividual,
       );
+      if (updated != null) {
+        final idx = deadlineStore.items.indexWhere((i) => i.id == entry.id);
+        if (idx >= 0) {
+          deadlineStore.updateAt(idx, DeadlineItem(
+            id: updated.id,
+            title: name,
+            courseName: course,
+            dueDate: _deadline,
+            difficulty: _selectedDifficulty ?? 'Medium',
+            isIndividual: _isIndividual,
+            type: 'assignment',
+          ));
+        }
+        await PlannerApi.generatePlan(availableHours: 20);
+        AppNav.onPlanRegenerated?.call();
+      }
       if (!mounted) return;
       setState(() {
         _assignments[_editingIndex!] = entry;
@@ -160,7 +177,15 @@ class _AssignmentAndProjectPageState extends State<AssignmentAndProjectPage> {
           difficulty: _selectedDifficulty ?? 'Medium',
           isIndividual: _isIndividual,
         ));
-        await PlannerApi.generatePlan(availableHours: 20);
+        // Brief delay in setup flow so Firestore has the deadline before generatePlan fetches it
+        await Future.delayed(const Duration(milliseconds: 500));
+        final plan = await PlannerApi.generatePlan(availableHours: 20);
+        AppNav.onPlanRegenerated?.call();
+        if (plan == null && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Plan saved but generation failed. Try opening Planner tab to retry.'), backgroundColor: Colors.orange),
+          );
+        }
         if (!mounted) return;
         setState(() {
           _assignments.add(_AssignmentEntry(

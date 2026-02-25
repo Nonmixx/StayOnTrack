@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_stayontrack/semester_setup_page.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'app_nav.dart';
 import 'user_session.dart'; // ← replaced authstore.dart
 import 'login.dart';
 import 'personal_information.dart';
@@ -50,25 +51,13 @@ class _SettingsPageState extends State<SettingsPage> {
 
       appBar: AppBar(
         backgroundColor: Colors.white,
-        elevation: 0.5,
-        leading: GestureDetector(
-          onTap: () => Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (_) => const LoginPage()),
-                (route) => false,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(width: 8),
-              const Icon(Icons.arrow_back_ios, color: Colors.black, size: 18),
-              Text('Back', style: _arimo(16)),
-            ],
-          ),
-        ),
-        leadingWidth: 90,
-        title: Text('Settings', style: _arimo(16)),
+        elevation: 0,
+        automaticallyImplyLeading: false,
         centerTitle: true,
+        title: const Text(
+          'Settings',
+          style: TextStyle(color: Colors.black87, fontSize: 18, fontWeight: FontWeight.w600),
+        ),
       ),
 
       body: Stack(
@@ -89,9 +78,11 @@ class _SettingsPageState extends State<SettingsPage> {
                 color: lavender.withOpacity(0.80),
               ),
               padding: const EdgeInsets.fromLTRB(24, 72, 24, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                   // Username (bold) + email below
                   if (displayUsername.isNotEmpty) ...[
                     Text(displayUsername,
@@ -131,10 +122,13 @@ class _SettingsPageState extends State<SettingsPage> {
                   _MenuItem(
                     icon: 'assets/images/academic_icon.png',
                     label: 'Academic Details',
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const SemesterSetupPage()),
-                    ),
+                    onTap: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const SemesterSetupPage()),
+                      );
+                      if (mounted) AppNav.onReturnFromSetup?.call();
+                    },
                     labelStyle: _arimo(16),
                   ),
                   _buildDivider(),
@@ -148,7 +142,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     labelStyle: _arimo(16),
                   ),
 
-                  const Spacer(),
+                  const SizedBox(height: 24),
 
                   // ── Logout ────────────────────────────────────────────────
                   SizedBox(
@@ -180,7 +174,8 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

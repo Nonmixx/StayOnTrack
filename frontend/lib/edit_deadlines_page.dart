@@ -273,6 +273,8 @@ class _EditDeadlinesPageState extends State<EditDeadlinesPage> {
                 final ok = await PlannerApi.deleteDeadline(id);
                 if (ok && mounted) {
                   deadlineStore.removeAt(index);
+                  await PlannerApi.generatePlan(availableHours: 20);
+                  AppNav.onPlanRegenerated?.call();
                 }
               } else {
                 deadlineStore.removeAt(index);

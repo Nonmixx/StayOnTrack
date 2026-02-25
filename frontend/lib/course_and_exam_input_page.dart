@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'app_nav.dart';
 import 'routes.dart';
 import 'api/planner_api.dart';
 import 'data/deadline_store.dart';
@@ -52,6 +53,25 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
     setState(() {
       _exams.clear();
       _exams.addAll(exams);
+    });
+    if (mounted) _applyEditArgs();
+  }
+
+  void _applyEditArgs() {
+    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    final editId = args?['editDeadlineId'] as String?;
+    if (editId == null || editId.isEmpty) return;
+    final idx = _exams.indexWhere((e) => e.id == editId);
+    if (idx < 0) return;
+    final e = _exams[idx];
+    setState(() {
+      _editingIndex = idx;
+      _courseNameController.text = e.courseName;
+      _selectedExamType = _examTypes.contains(e.examType) ? e.examType : 'Other';
+      _otherTypeController.text = _examTypes.contains(e.examType) ? '' : e.examType;
+      _examDate = e.date;
+      _weightValue = e.weight ?? 0;
+      _weightController.text = '${_weightValue}';
     });
   }
 
@@ -159,7 +179,7 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
       weight: _weightValue,
     );
     if (_editingIndex != null && entry.id != null && entry.id!.isNotEmpty) {
-      await PlannerApi.updateDeadline(
+      final updated = await PlannerApi.updateDeadline(
         id: entry.id!,
         title: '$course - ${entry.examType}',
         course: course,
@@ -167,6 +187,23 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
         type: 'exam',
         difficulty: entry.weight != null && entry.weight! > 0 ? '${entry.weight}%' : null,
       );
+      if (updated != null) {
+        final idx = deadlineStore.items.indexWhere((i) => i.id == entry.id);
+        if (idx >= 0) {
+          deadlineStore.updateAt(idx, DeadlineItem(
+            id: updated.id,
+            title: '$course - ${entry.examType}',
+            courseName: course,
+            dueDate: entry.date,
+            difficulty: entry.weight != null ? '${entry.weight}%' : '—',
+            isIndividual: true,
+            type: 'exam',
+          ));
+        }
+        await PlannerApi.generatePlan(availableHours: 20);
+        AppNav.onPlanRegenerated?.call();
+      }
+      if (!mounted) return;
       setState(() {
         _exams[_editingIndex!] = entry;
         _editingIndex = null;
@@ -191,7 +228,16 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
           difficulty: entry.weight != null ? '${entry.weight}%' : '—',
           isIndividual: true,
         ));
-        await PlannerApi.generatePlan(availableHours: 20);
+        // Brief delay when in setup flow so Firestore has the deadline before generatePlan fetches it
+        final fromSetup = ModalRoute.of(context)?.settings.arguments?['fromHomeAdd'] != true;
+        if (fromSetup) await Future.delayed(const Duration(milliseconds: 500));
+        final plan = await PlannerApi.generatePlan(availableHours: 20);
+        AppNav.onPlanRegenerated?.call();
+        if (plan == null && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Plan saved but generation failed. Try opening Planner tab to retry.'), backgroundColor: Colors.orange),
+          );
+        }
         setState(() {
           _exams.add(_ExamEntry(
             id: created.id,

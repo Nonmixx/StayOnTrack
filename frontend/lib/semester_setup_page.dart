@@ -139,6 +139,25 @@ class _SemesterSetupPageState extends State<SemesterSetupPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _pageBackground,
+      appBar: AppBar(
+        backgroundColor: _pageBackground,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.chevron_left),
+          onPressed: () => Navigator.pop(context),
+          style: IconButton.styleFrom(foregroundColor: _darkPurple),
+        ),
+        title: const Text(
+          'Back',
+          style: TextStyle(
+            color: Color(0xFF4A5568),
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        titleSpacing: 0,
+        centerTitle: false,
+      ),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -148,30 +167,27 @@ class _SemesterSetupPageState extends State<SemesterSetupPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Header
+                  // Title (matches Exam Schedule layout)
                   Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Semester Setup',
-                          style: TextStyle(
-                            color: _titlePurple,
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Define your academic timeline so we can plan your workload.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: _darkPurple.withValues(alpha: 0.8),
-                            fontSize: 15,
-                            height: 1.4,
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      'Semester Setup',
+                      style: TextStyle(
+                        color: _titlePurple,
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Center(
+                    child: Text(
+                      'Define your academic timeline so we can plan your workload.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: _darkPurple.withValues(alpha: 0.8),
+                        fontSize: 15,
+                        height: 1.4,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 24),

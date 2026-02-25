@@ -8,7 +8,8 @@ import 'widgets/empty_state_card.dart';
 import 'data/deadline_store.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  const HomePage({super.key, this.refreshTrigger = 0});
+  final int refreshTrigger;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -35,6 +36,12 @@ class _HomePageState extends State<HomePage> {
 
   void _onDeadlineStoreChanged() {
     if (mounted) _loadData();
+  }
+
+  @override
+  void didUpdateWidget(HomePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.refreshTrigger != widget.refreshTrigger) _loadData();
   }
 
   static String _storeTaskId(DeadlineItem item) {
@@ -349,6 +356,7 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
+        automaticallyImplyLeading: false,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

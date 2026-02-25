@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'dart:html' as html;
+import 'package:file_picker/file_picker.dart';
 import 'api/group_api.dart';
 
 /// Page 6.2 - Group & Assignment Setup
@@ -165,17 +165,15 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
   );
 
   Future<void> _pickFile() async {
-    final uploadInput = html.FileUploadInputElement();
-    uploadInput.accept = '.pdf,.doc,.docx';
-    uploadInput.click();
-    uploadInput.onChange.listen((event) {
-      final files = uploadInput.files;
-      if (files != null && files.isNotEmpty) {
-        setState(() {
-          _uploadedFileName = files.first.name;
-        });
-      }
-    });
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'doc', 'docx'],
+    );
+    if (result != null && result.files.isNotEmpty && mounted) {
+      setState(() {
+        _uploadedFileName = result.files.first.name;
+      });
+    }
   }
 
   @override

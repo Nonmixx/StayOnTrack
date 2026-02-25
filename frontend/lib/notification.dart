@@ -87,22 +87,16 @@ class _NotificationSettingsPageState
       backgroundColor: cream,
       appBar: AppBar(
         backgroundColor: Colors.white,
-        elevation: 0.5,
-        leading: GestureDetector(
-          onTap: () => Navigator.pop(context),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(width: 8),
-              const Icon(Icons.arrow_back_ios,
-                  color: Colors.black, size: 18),
-              Text('Back', style: _arimo(16)),
-            ],
-          ),
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          onPressed: () => Navigator.pop(context),
         ),
-        leadingWidth: 90,
-        title: Text('Notification Settings', style: _arimo(16)),
         centerTitle: true,
+        title: const Text(
+          'Notification Settings',
+          style: TextStyle(color: Colors.black87, fontSize: 18, fontWeight: FontWeight.w600),
+        ),
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: 3,
