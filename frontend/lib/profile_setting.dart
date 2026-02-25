@@ -83,97 +83,97 @@ class _SettingsPageState extends State<SettingsPage> {
                   crossAxisAlignment: CrossAxisAlignment.center,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                  // Username (bold) + email below
-                  if (displayUsername.isNotEmpty) ...[
-                    Text(displayUsername,
-                        style: _arimo(17,
-                            color: const Color(0xFF2D2D2D),
-                            weight: FontWeight.w600)),
-                    const SizedBox(height: 4),
-                  ],
-                  Text(displayEmail, style: _arimo(14, color: emailGrey)),
-                  const SizedBox(height: 24),
-
-                  // ── Menu items ────────────────────────────────────────────
-                  _MenuItem(
-                    icon: 'assets/images/personal_information_icon.png',
-                    label: 'Personal Information',
-                    onTap: () async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const ProfilePage()),
-                      );
-                      _refresh(); // refresh after returning from profile page
-                    },
-                    labelStyle: _arimo(16),
-                  ),
-                  _buildDivider(),
-                  _MenuItem(
-                    icon: 'assets/images/notification_icon.png',
-                    label: 'Notification Settings',
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => const NotificationSettingsPage()),
-                    ),
-                    labelStyle: _arimo(16),
-                  ),
-                  _buildDivider(),
-                  _MenuItem(
-                    icon: 'assets/images/academic_icon.png',
-                    label: 'Academic Details',
-                    onTap: () async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const SemesterSetupPage()),
-                      );
-                      if (mounted) AppNav.onReturnFromSetup?.call();
-                    },
-                    labelStyle: _arimo(16),
-                  ),
-                  _buildDivider(),
-                  _MenuItem(
-                    icon: 'assets/images/pets_icon.png',
-                    label: 'My Pets',
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const MyPetsPage()),
-                    ),
-                    labelStyle: _arimo(16),
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // ── Logout ────────────────────────────────────────────────
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: ElevatedButton.icon(
-                      onPressed: () async {
-                        await UserSession.clear(); // clears SharedPreferences
-                        if (!mounted) return;
-                        Navigator.pushAndRemoveUntil(
-                          context,
-                          MaterialPageRoute(builder: (_) => const LoginPage()),
-                              (route) => false,
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: redBtn,
-                        foregroundColor: Colors.white,
-                        elevation: 2,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30)),
-                      ),
-                      icon: const Icon(Icons.logout,
-                          color: Colors.white, size: 22),
-                      label: Text('Logout',
-                          style: _arimo(24,
-                              color: Colors.white,
+                    // Username (bold) + email below
+                    if (displayUsername.isNotEmpty) ...[
+                      Text(displayUsername,
+                          style: _arimo(17,
+                              color: const Color(0xFF2D2D2D),
                               weight: FontWeight.w600)),
+                      const SizedBox(height: 4),
+                    ],
+                    Text(displayEmail, style: _arimo(14, color: emailGrey)),
+                    const SizedBox(height: 24),
+
+                    // ── Menu items ────────────────────────────────────────────
+                    _MenuItem(
+                      icon: 'assets/images/personal_information_icon.png',
+                      label: 'Personal Information',
+                      onTap: () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const ProfilePage()),
+                        );
+                        _refresh(); // refresh after returning from profile page
+                      },
+                      labelStyle: _arimo(16),
                     ),
-                  ),
-                  const SizedBox(height: 16),
+                    _buildDivider(),
+                    _MenuItem(
+                      icon: 'assets/images/notification_icon.png',
+                      label: 'Notification Settings',
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const NotificationSettingsPage()),
+                      ),
+                      labelStyle: _arimo(16),
+                    ),
+                    _buildDivider(),
+                    _MenuItem(
+                      icon: 'assets/images/academic_icon.png',
+                      label: 'Academic Details',
+                      onTap: () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const SemesterSetupPage()),
+                        );
+                        if (mounted) AppNav.onReturnFromSetup?.call();
+                      },
+                      labelStyle: _arimo(16),
+                    ),
+                    _buildDivider(),
+                    _MenuItem(
+                      icon: 'assets/images/pets_icon.png',
+                      label: 'My Pets',
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const MyPetsPage()),
+                      ),
+                      labelStyle: _arimo(16),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // ── Logout ────────────────────────────────────────────────
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
+                          await UserSession.clear(); // clears SharedPreferences
+                          if (!mounted) return;
+                          Navigator.pushAndRemoveUntil(
+                            context,
+                            MaterialPageRoute(builder: (_) => const LoginPage()),
+                                (route) => false,
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: redBtn,
+                          foregroundColor: Colors.white,
+                          elevation: 2,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30)),
+                        ),
+                        icon: const Icon(Icons.logout,
+                            color: Colors.white, size: 22),
+                        label: Text('Logout',
+                            style: _arimo(24,
+                                color: Colors.white,
+                                weight: FontWeight.w600)),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
                   ],
                 ),
               ),

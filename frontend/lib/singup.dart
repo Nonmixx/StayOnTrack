@@ -27,7 +27,6 @@ class _SignUpPageState extends State<SignUpPage> {
   String? _termsError;
   String? _serverError;
 
-
   @override
   void dispose() {
     _usernameController.dispose();
@@ -67,7 +66,6 @@ class _SignUpPageState extends State<SignUpPage> {
   }
 
   Future<void> _validate() async {
-    // 1. Client-side validation
     setState(() {
       _serverError = null;
       _usernameError = _usernameController.text.trim().isEmpty
@@ -84,7 +82,6 @@ class _SignUpPageState extends State<SignUpPage> {
 
     if (!_isFormValid) return;
 
-    // 2. Call backend
     setState(() => _isLoading = true);
 
     try {
@@ -101,7 +98,6 @@ class _SignUpPageState extends State<SignUpPage> {
       if (!mounted) return;
 
       if (response.statusCode == 201) {
-        // ✅ Registered — clear entire stack then go to login
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (_) => const LoginPage()),
@@ -133,6 +129,8 @@ class _SignUpPageState extends State<SignUpPage> {
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5F0EB),
       body: SafeArea(
@@ -143,14 +141,18 @@ class _SignUpPageState extends State<SignUpPage> {
               Container(
                 width: double.infinity,
                 color: const Color(0xFFF5F0EB),
-                padding: const EdgeInsets.only(
-                    top: 12, left: 16, right: 16, bottom: 90),
+                padding: EdgeInsets.only(
+                    top: screenHeight * 0.015,
+                    left: 16,
+                    right: 16,
+                    bottom: screenHeight * 0.08),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Image.asset('assets/images/latest_logo.png',
-                        height: 100, width: 100),
-                    const SizedBox(height: 30),
+                        height: screenHeight * 0.12,
+                        width: screenHeight * 0.12),
+                    SizedBox(height: screenHeight * 0.03),
                   ],
                 ),
               ),
@@ -161,8 +163,12 @@ class _SignUpPageState extends State<SignUpPage> {
                   Container(
                     width: double.infinity,
                     decoration: BoxDecoration(
-                        color: const Color(0xFFE6CFE6).withOpacity(0.80)),
-                    padding: const EdgeInsets.fromLTRB(24, 140, 24, 15),
+                        color: const Color(0xFFE6CFE6).withOpacity(0.80),
+                        borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(30),
+                            topRight: Radius.circular(30))),
+                    padding: EdgeInsets.fromLTRB(
+                        24, screenHeight * 0.18, 24, screenHeight * 0.05),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -172,7 +178,7 @@ class _SignUpPageState extends State<SignUpPage> {
                                 fontWeight: FontWeight.w700,
                                 color: const Color(0xFF2D2D4E),
                                 letterSpacing: -0.5)),
-                        const SizedBox(height: 22),
+                        SizedBox(height: screenHeight * 0.025),
 
                         _buildInputField(
                           controller: _usernameController,
@@ -185,7 +191,7 @@ class _SignUpPageState extends State<SignUpPage> {
                                 ? 'Username cannot be empty' : null;
                           }),
                         ),
-                        const SizedBox(height: 14),
+                        SizedBox(height: screenHeight * 0.015),
 
                         _buildInputField(
                           controller: _emailController,
@@ -198,7 +204,7 @@ class _SignUpPageState extends State<SignUpPage> {
                                 _validateEmail(_emailController.text.trim());
                           }),
                         ),
-                        const SizedBox(height: 14),
+                        SizedBox(height: screenHeight * 0.015),
 
                         _buildInputField(
                           controller: _passwordController,
@@ -213,11 +219,12 @@ class _SignUpPageState extends State<SignUpPage> {
                               _confirmPasswordError =
                               _confirmPasswordController.text !=
                                   _passwordController.text
-                                  ? 'Passwords do not match' : null;
+                                  ? 'Passwords do not match'
+                                  : null;
                             }
                           }),
                         ),
-                        const SizedBox(height: 14),
+                        SizedBox(height: screenHeight * 0.015),
 
                         _buildInputField(
                           controller: _confirmPasswordController,
@@ -231,10 +238,11 @@ class _SignUpPageState extends State<SignUpPage> {
                                 ? 'Please confirm your password'
                                 : _confirmPasswordController.text !=
                                 _passwordController.text
-                                ? 'Passwords do not match' : null;
+                                ? 'Passwords do not match'
+                                : null;
                           }),
                         ),
-                        const SizedBox(height: 14),
+                        SizedBox(height: screenHeight * 0.015),
 
                         // Terms checkbox
                         Row(
@@ -289,7 +297,6 @@ class _SignUpPageState extends State<SignUpPage> {
                             ),
                           ],
                         ),
-
                         if (_termsError != null)
                           Padding(
                             padding: const EdgeInsets.only(top: 4, left: 4),
@@ -297,9 +304,8 @@ class _SignUpPageState extends State<SignUpPage> {
                                 style: const TextStyle(
                                     color: Colors.red, fontSize: 11)),
                           ),
-
                         if (_serverError != null) ...[
-                          const SizedBox(height: 12),
+                          SizedBox(height: screenHeight * 0.015),
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.symmetric(
@@ -325,8 +331,7 @@ class _SignUpPageState extends State<SignUpPage> {
                             ),
                           ),
                         ],
-
-                        const SizedBox(height: 35),
+                        SizedBox(height: screenHeight * 0.045),
 
                         SizedBox(
                           width: double.infinity,
@@ -362,11 +367,12 @@ class _SignUpPageState extends State<SignUpPage> {
                     ),
                   ),
                   Positioned(
-                    top: -120,
+                    top: screenHeight * -0.15,
                     child: Image.asset('assets/images/signup_image.png',
-                        height: 250, width: 250, fit: BoxFit.contain),
+                        height: screenHeight * 0.3,
+                        width: screenHeight * 0.3,
+                        fit: BoxFit.contain),
                   ),
-                  const SizedBox(height: 50),
                 ],
               ),
             ],
@@ -394,16 +400,14 @@ class _SignUpPageState extends State<SignUpPage> {
             color: Colors.white.withOpacity(0.90),
             borderRadius: BorderRadius.circular(30),
             border: Border.all(
-              color: errorText != null
-                  ? Colors.red.shade400 : Colors.grey.shade300,
+              color: errorText != null ? Colors.red.shade400 : Colors.grey.shade300,
               width: errorText != null ? 1.5 : 1,
             ),
           ),
           child: Row(
             children: [
               const SizedBox(width: 16),
-              Image.asset(iconAsset,
-                  height: 22, width: 22, fit: BoxFit.contain),
+              Image.asset(iconAsset, height: 22, width: 22, fit: BoxFit.contain),
               const SizedBox(width: 10),
               Expanded(
                 child: TextField(
@@ -414,15 +418,12 @@ class _SignUpPageState extends State<SignUpPage> {
                   enabled: !_isLoading,
                   decoration: InputDecoration(
                     hintText: hintText,
-                    hintStyle: TextStyle(
-                        color: Colors.grey.shade500, fontSize: 15),
+                    hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 15),
                     border: InputBorder.none,
                     isDense: true,
-                    contentPadding:
-                    const EdgeInsets.symmetric(vertical: 4),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 4),
                   ),
-                  style: const TextStyle(
-                      fontSize: 15, color: Colors.black87),
+                  style: const TextStyle(fontSize: 15, color: Colors.black87),
                 ),
               ),
             ],
@@ -431,9 +432,7 @@ class _SignUpPageState extends State<SignUpPage> {
         if (errorText != null)
           Padding(
             padding: const EdgeInsets.only(top: 4, left: 16),
-            child: Text(errorText,
-                style:
-                const TextStyle(color: Colors.red, fontSize: 11)),
+            child: Text(errorText, style: const TextStyle(color: Colors.red, fontSize: 11)),
           ),
       ],
     );
