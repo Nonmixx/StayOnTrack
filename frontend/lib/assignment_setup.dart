@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import 'api/group_api.dart';
 
 /// Page 6.2 - Group & Assignment Setup
@@ -18,6 +19,12 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
 
   DateTime? _selectedDeadline;
   bool _isGenerating = false;
+  bool _isAddMemberHovered = false;
+  bool _isUploading = false;
+
+  // ── FIX: list of uploaded files, max 3 ──
+  final List<String> _uploadedFileNames = [];
+  static const int _maxFiles = 3;
 
   List<Map<String, dynamic>> _members = [
     {'name': TextEditingController(), 'strengths': <String>[]},
@@ -33,9 +40,7 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
     'Testing',
   ];
 
-  // ── Validation ──────────────────────────────────────────────────────────────
-
-  /// True when all required fields are filled.
+  // ── FIX: brief text OR uploaded file(s) satisfies brief requirement ──
   bool get _isFormValid {
     if (_groupNameController.text.trim().isEmpty) return false;
     if (_courseNameController.text.trim().isEmpty) return false;
@@ -45,18 +50,63 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
       (m) => (m['name'] as TextEditingController).text.trim().isNotEmpty,
     );
     if (!hasNamedMember) return false;
-    if (_briefController.text.trim().isEmpty) return false;
+    if (_briefController.text.trim().isEmpty && _uploadedFileNames.isEmpty)
+      return false;
     return true;
   }
 
   @override
   void initState() {
     super.initState();
-    // Rebuild whenever any text field changes so button enables/disables live
     _groupNameController.addListener(() => setState(() {}));
     _courseNameController.addListener(() => setState(() {}));
     _assignmentTitleController.addListener(() => setState(() {}));
     _briefController.addListener(() => setState(() {}));
+  }
+
+  // ── FIX: pick and add file to list ──
+  Future<void> _pickFile() async {
+    if (_uploadedFileNames.length >= _maxFiles) return;
+    setState(() => _isUploading = true);
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'doc', 'docx'],
+        withData: true,
+      );
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.first;
+        if (!_uploadedFileNames.contains(file.name)) {
+          setState(() => _uploadedFileNames.add(file.name));
+        }
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Uploaded: ${file.name}'),
+              backgroundColor: const Color(0xFF008236),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to pick file. Please try again.'),
+            backgroundColor: Color(0xFFE70030),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } finally {
+      setState(() => _isUploading = false);
+    }
+  }
+
+  // ── FIX: delete a specific uploaded file ──
+  void _removeFile(int index) {
+    setState(() => _uploadedFileNames.removeAt(index));
   }
 
   Future<void> _generateTasks() async {
@@ -102,7 +152,6 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
     }
   }
 
-  // Shared input decoration with shadow
   BoxDecoration get _inputBoxDecoration => BoxDecoration(
     color: const Color(0xFFFFFFFF),
     borderRadius: BorderRadius.circular(8),
@@ -144,7 +193,6 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
     contentPadding: const EdgeInsets.all(12),
   );
 
-  // Shared card decoration with shadow
   BoxDecoration get _cardDecoration => BoxDecoration(
     color: const Color(0xFFFFFFFF),
     borderRadius: BorderRadius.circular(14),
@@ -234,7 +282,6 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
     );
   }
 
-  // ── SECTION A: Group Members ──
   Widget _buildGroupMembersSection() {
     return Container(
       decoration: _cardDecoration,
@@ -252,11 +299,8 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
             ),
           ),
           const SizedBox(height: 10),
-          // Divider under title, same width as cards
           const Divider(color: Color(0xFFE7E6EB), thickness: 1, height: 1),
           const SizedBox(height: 16),
-
-          // Group Name row — in a card with shadow
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
@@ -307,46 +351,51 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
             ),
           ),
           const SizedBox(height: 16),
-
-          // Member List
-          ..._members.asMap().entries.map((entry) {
-            return _buildMemberCard(entry.key, entry.value);
-          }),
-
+          ..._members.asMap().entries.map(
+            (entry) => _buildMemberCard(entry.key, entry.value),
+          ),
           const SizedBox(height: 4),
-
-          // Add Member Button — dashed border, text label
-          GestureDetector(
-            onTap: () {
-              setState(() {
+          MouseRegion(
+            onEnter: (_) => setState(() => _isAddMemberHovered = true),
+            onExit: (_) => setState(() => _isAddMemberHovered = false),
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: () => setState(() {
                 _members.add({
                   'name': TextEditingController(),
                   'strengths': <String>[],
                 });
-              });
-            },
-            child: CustomPaint(
-              painter: _DashedBorderPainter(
-                color: const Color(0xFF99A1AF),
-                borderRadius: 10,
-                dashWidth: 6,
-                dashSpace: 4,
-              ),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFFFFF),
-                  borderRadius: BorderRadius.circular(10),
+              }),
+              child: CustomPaint(
+                painter: _DashedBorderPainter(
+                  color: _isAddMemberHovered
+                      ? const Color(0xFFAFBCDD)
+                      : const Color(0xFF99A1AF),
+                  borderRadius: 10,
+                  dashWidth: 6,
+                  dashSpace: 4,
                 ),
-                child: const Center(
-                  child: Text(
-                    '+ Add member',
-                    style: TextStyle(
-                      fontFamily: 'Arimo',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: Color(0xFF99A1AF),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: _isAddMemberHovered
+                        ? const Color(0xFFEFF3FB)
+                        : const Color(0xFFFFFFFF),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Center(
+                    child: Text(
+                      '+ Add member',
+                      style: TextStyle(
+                        fontFamily: 'Arimo',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: _isAddMemberHovered
+                            ? const Color(0xFFAFBCDD)
+                            : const Color(0xFF99A1AF),
+                      ),
                     ),
                   ),
                 ),
@@ -358,7 +407,6 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
     );
   }
 
-  // Individual Member Card
   Widget _buildMemberCard(int index, Map<String, dynamic> member) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -383,7 +431,6 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Member header
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -408,8 +455,6 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
             ],
           ),
           const SizedBox(height: 12),
-
-          // Name input with shadow
           Container(
             decoration: _inputBoxDecoration,
             child: TextField(
@@ -423,7 +468,6 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
             ),
           ),
           const SizedBox(height: 12),
-
           const Text(
             'Strengths',
             style: TextStyle(
@@ -434,8 +478,6 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
             ),
           ),
           const SizedBox(height: 8),
-
-          // Strength chips with shadow
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -501,7 +543,6 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
     );
   }
 
-  // ── SECTION B: Assignment Details ──
   Widget _buildAssignmentDetailsSection() {
     return Container(
       decoration: _cardDecoration,
@@ -521,24 +562,18 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
           const SizedBox(height: 10),
           const Divider(color: Color(0xFFE7E6EB), thickness: 1, height: 1),
           const SizedBox(height: 16),
-
-          // Course Name
           _buildLabeledField(
             label: 'Course Name',
             controller: _courseNameController,
             hint: 'e.g. CS101',
           ),
           const SizedBox(height: 16),
-
-          // Assignment Title
           _buildLabeledField(
             label: 'Assignment Title',
             controller: _assignmentTitleController,
             hint: 'e.g. Final Group Project',
           ),
           const SizedBox(height: 16),
-
-          // Deadline
           const Text(
             'Deadline',
             style: TextStyle(
@@ -561,14 +596,12 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
                 final TimeOfDay? pickedTime = await showTimePicker(
                   context: context,
                   initialTime: TimeOfDay.now(),
-                  builder: (context, child) {
-                    return MediaQuery(
-                      data: MediaQuery.of(
-                        context,
-                      ).copyWith(alwaysUse24HourFormat: false),
-                      child: child!,
-                    );
-                  },
+                  builder: (context, child) => MediaQuery(
+                    data: MediaQuery.of(
+                      context,
+                    ).copyWith(alwaysUse24HourFormat: false),
+                    child: child!,
+                  ),
                 );
                 if (pickedTime != null) {
                   setState(() {
@@ -644,8 +677,9 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
     return '$day/$month/$year  ${hour12.toString().padLeft(2, '0')}:$minute $ampm';
   }
 
-  // ── SECTION C: Assignment Questions/Brief ──
   Widget _buildAssignmentBriefSection() {
+    final bool canAddMore = _uploadedFileNames.length < _maxFiles;
+
     return Container(
       decoration: _cardDecoration,
       padding: const EdgeInsets.all(16),
@@ -665,7 +699,7 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
           const Divider(color: Color(0xFFE7E6EB), thickness: 1, height: 1),
           const SizedBox(height: 16),
 
-          // Paste brief text area — F5F5F5, shadow, 909EC3 hint
+          // Brief text area
           Container(
             decoration: BoxDecoration(
               color: const Color(0xFFF5F5F5),
@@ -743,49 +777,158 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
           ),
           const SizedBox(height: 16),
 
-          // Upload button — dashed AFBCDD stroke, F5F5F5 fill, no shadow
+          // ── FIX: uploaded files list with individual delete buttons ──
+          if (_uploadedFileNames.isNotEmpty) ...[
+            ..._uploadedFileNames.asMap().entries.map((entry) {
+              final int idx = entry.key;
+              final String name = entry.value;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDBFCE7),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: const Color(0xFF008236).withOpacity(0.2),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.insert_drive_file_outlined,
+                      color: Color(0xFF008236),
+                      size: 18,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        name,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontFamily: 'Arimo',
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF008236),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // delete button
+                    GestureDetector(
+                      onTap: () => _removeFile(idx),
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEE2E2),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Icon(
+                          Icons.close,
+                          size: 14,
+                          color: Color(0xFFE70030),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+            const SizedBox(height: 8),
+          ],
+
+          // ── FIX: upload area — disabled when at max ──
           GestureDetector(
-            onTap: () {},
+            onTap: (_isUploading || !canAddMore) ? null : _pickFile,
             child: CustomPaint(
               painter: _DashedBorderPainter(
-                color: const Color(0xFFAFBCDD),
+                color: !canAddMore
+                    ? const Color(0xFFDDDDDD)
+                    : const Color(0xFFAFBCDD),
                 borderRadius: 8,
                 dashWidth: 6,
                 dashSpace: 4,
               ),
               child: Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 28),
+                padding: const EdgeInsets.symmetric(vertical: 22),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF5F5F5),
+                  color: !canAddMore
+                      ? const Color(0xFFF0F0F0)
+                      : const Color(0xFFF5F5F5),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
-                    Icon(
-                      Icons.upload_file_outlined,
-                      color: Color(0xFF909EC3),
-                      size: 32,
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      'Upload PDF / DOC',
-                      style: TextStyle(
-                        fontFamily: 'Arimo',
-                        color: Color(0xFF909EC3),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
+                  children: [
+                    if (_isUploading)
+                      const SizedBox(
+                        width: 28,
+                        height: 28,
+                        child: CircularProgressIndicator(
+                          color: Color(0xFFAFBCDD),
+                          strokeWidth: 2,
+                        ),
+                      )
+                    else ...[
+                      Icon(
+                        Icons.upload_file_outlined,
+                        color: !canAddMore
+                            ? const Color(0xFFCCCCCC)
+                            : const Color(0xFF909EC3),
+                        size: 28,
                       ),
-                    ),
+                      const SizedBox(height: 6),
+                      Text(
+                        !canAddMore
+                            ? 'Maximum $_maxFiles files reached'
+                            : 'Upload PDF / DOC',
+                        style: TextStyle(
+                          fontFamily: 'Arimo',
+                          color: !canAddMore
+                              ? const Color(0xFFCCCCCC)
+                              : const Color(0xFF909EC3),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      if (!canAddMore)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 2),
+                          child: Text(
+                            'Remove a file to upload another',
+                            style: TextStyle(
+                              fontFamily: 'Arimo',
+                              color: Color(0xFFCCCCCC),
+                              fontSize: 11,
+                            ),
+                          ),
+                        )
+                      else if (_uploadedFileNames.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            '${_uploadedFileNames.length}/$_maxFiles files — tap to add more',
+                            style: const TextStyle(
+                              fontFamily: 'Arimo',
+                              color: Color(0xFF99A1AF),
+                              fontSize: 11,
+                            ),
+                          ),
+                        ),
+                    ],
                   ],
                 ),
               ),
             ),
           ),
+
           const SizedBox(height: 12),
 
-          // AI note — blue
+          // AI note
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -819,7 +962,6 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
     );
   }
 
-  // ── SECTION D: Generate Button ──
   Widget _buildGenerateButton() {
     final bool canGenerate = _isFormValid;
     return Container(
@@ -838,16 +980,14 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
                   offset: const Offset(0, 1),
                 ),
               ]
-            : [], // no shadow when disabled
+            : [],
       ),
       child: ElevatedButton(
         onPressed: (canGenerate && !_isGenerating) ? _generateTasks : null,
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF9C9EC3),
           foregroundColor: const Color(0xFFFFFFFF),
-          disabledBackgroundColor: const Color(
-            0xFFD4D6E8,
-          ), // lighter purple-grey when disabled
+          disabledBackgroundColor: const Color(0xFFD4D6E8),
           disabledForegroundColor: const Color(0xFFFFFFFF).withOpacity(0.5),
           elevation: 0,
           padding: const EdgeInsets.symmetric(vertical: 16),
@@ -876,7 +1016,6 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
     );
   }
 
-  // Helper: labeled text field with shadow
   Widget _buildLabeledField({
     required String label,
     required TextEditingController controller,
@@ -924,7 +1063,6 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
   }
 }
 
-/// Custom painter for dashed border
 class _DashedBorderPainter extends CustomPainter {
   final Color color;
   final double borderRadius;
@@ -951,7 +1089,6 @@ class _DashedBorderPainter extends CustomPainter {
       Rect.fromLTWH(0, 0, size.width, size.height),
       Radius.circular(borderRadius),
     );
-
     final Path path = Path()..addRRect(rrect);
 
     for (final metric in path.computeMetrics()) {
@@ -959,9 +1096,8 @@ class _DashedBorderPainter extends CustomPainter {
       bool draw = true;
       while (distance < metric.length) {
         final double len = draw ? dashWidth : dashSpace;
-        if (draw) {
+        if (draw)
           canvas.drawPath(metric.extractPath(distance, distance + len), paint);
-        }
         distance += len;
         draw = !draw;
       }

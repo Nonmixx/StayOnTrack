@@ -14,13 +14,21 @@ public class GroupService {
     @Autowired
     private AIService aiService;
 
-    private final Firestore db = FirestoreClient.getFirestore();
+    // ── FIX: was `private final Firestore db = FirestoreClient.getFirestore();`
+    //    That runs at field-init time, BEFORE FirebaseConfig @PostConstruct,
+    //    so Firebase isn't initialized yet → falls back to Vertex AI gRPC → quota error.
+    //    Solution: fetch db lazily inside each method call instead. ──
+    private Firestore getDb() {
+        return FirestoreClient.getFirestore();
+    }
 
     public String createGroupAssignment(Map<String, Object> body) {
         System.out.println("✅ createGroupAssignment called");
         System.out.println("📦 Body keys: " + body.keySet());
 
         try {
+            Firestore db = getDb();
+
             DocumentReference docRef = db.collection("groups").document();
             String assignmentId = docRef.getId();
             System.out.println("📝 assignmentId: " + assignmentId);
@@ -28,8 +36,6 @@ public class GroupService {
             List<Map<String, Object>> members =
                 (List<Map<String, Object>>) body.get("members");
 
-            // ── FIX: compute memberInitials and save into group document
-            //    so GroupPage can show avatars without extra queries ──
             List<String> memberInitials = members.stream()
                 .map(m -> {
                     String name = (String) m.get("name");
@@ -40,7 +46,6 @@ public class GroupService {
 
             Map<String, Object> groupData = new HashMap<>(body);
             groupData.put("createdAt", FieldValue.serverTimestamp());
-            groupData.put("status", "On track");
             groupData.put("memberInitials", memberInitials);
             docRef.set(groupData).get();
             System.out.println("✅ Group document saved");
@@ -53,24 +58,25 @@ public class GroupService {
 
             String brief = (String) body.get("brief");
             System.out.println("📋 Brief length: " + (brief != null ? brief.length() : 0));
-            List<Map<String, Object>> tasks = aiService.extractTasks(brief, members);
-            System.out.println("✅ AI returned " + tasks.size() + " tasks");
-
-            if (tasks.isEmpty()) {
-                System.err.println("⚠️ AI returned 0 tasks — check AIService logs above");
+            List<Map<String, Object>> distribution = aiService.generateFullPlan(brief, members);
+            System.out.println("✅ AI distribution for " + distribution.size() + " members");
+            if (distribution.isEmpty()) {
+                throw new RuntimeException("AI did not generate tasks/distribution. Check Gemini API quota/key.");
             }
 
-            for (int i = 0; i < tasks.size(); i++) {
-                tasks.get(i).put("id", i + 1);
+            List<Map<String, Object>> tasks = flattenTasksFromDistribution(distribution);
+            System.out.println("✅ Flattened " + tasks.size() + " tasks from mega-prompt distribution");
+            if (tasks.isEmpty()) {
+                throw new RuntimeException("AI returned distribution but no tasks.");
+            }
+
+            for (Map<String, Object> task : tasks) {
                 db.collection("groupTasks").document(assignmentId)
-                  .collection("tasks").add(tasks.get(i)).get();
+                    .collection("tasks").add(task).get();
             }
             System.out.println("✅ Tasks saved to Firestore");
 
-            List<Map<String, Object>> distribution =
-                aiService.distributeTasks(tasks, members);
-            System.out.println("✅ AI distribution for " + distribution.size() + " members");
-            saveDistribution(assignmentId, distribution);
+            saveDistribution(db, assignmentId, distribution);
             System.out.println("✅ Distribution saved");
 
             return assignmentId;
@@ -84,6 +90,7 @@ public class GroupService {
 
     public List<Map<String, Object>> getGroupsByUser(String userId) {
         try {
+            Firestore db = getDb();
             QuerySnapshot snapshot = db.collection("groups")
                 .whereEqualTo("userId", userId)
                 .get().get();
@@ -102,13 +109,16 @@ public class GroupService {
 
     public List<Map<String, Object>> getTasks(String assignmentId) {
         try {
+            Firestore db = getDb();
             QuerySnapshot snapshot = db.collection("groupTasks")
                 .document(assignmentId)
                 .collection("tasks")
                 .get().get();
-            return snapshot.getDocuments().stream()
+            List<Map<String, Object>> tasks = snapshot.getDocuments().stream()
                 .map(DocumentSnapshot::getData)
                 .collect(Collectors.toList());
+            tasks.sort(Comparator.comparingInt(this::parseTaskId));
+            return tasks;
         } catch (Exception e) {
             System.err.println("❌ getTasks error: " + e.getMessage());
             return Collections.emptyList();
@@ -117,26 +127,35 @@ public class GroupService {
 
     public List<Map<String, Object>> regenerateTasks(String assignmentId) {
         try {
+            Firestore db = getDb();
             DocumentSnapshot doc = db.collection("groups")
                 .document(assignmentId).get().get();
             String brief = (String) doc.get("brief");
-            List<Map<String, Object>> members = getMembers(assignmentId);
-            deleteSubcollection("groupTasks", assignmentId, "tasks");
-            List<Map<String, Object>> newTasks = aiService.extractTasks(brief, members);
-            for (int i = 0; i < newTasks.size(); i++) {
-                newTasks.get(i).put("id", i + 1);
-                db.collection("groupTasks").document(assignmentId)
-                  .collection("tasks").add(newTasks.get(i)).get();
+            List<Map<String, Object>> members = getMembers(db, assignmentId);
+
+            deleteSubcollection(db, "groupTasks", assignmentId, "tasks");
+            List<Map<String, Object>> newDistribution = aiService.generateFullPlan(brief, members);
+            if (newDistribution.isEmpty()) {
+                throw new RuntimeException("AI did not generate tasks/distribution during regenerate.");
             }
-            return newTasks;
+
+            List<Map<String, Object>> newTasks = flattenTasksFromDistribution(newDistribution);
+            for (Map<String, Object> task : newTasks) {
+                db.collection("groupTasks").document(assignmentId)
+                    .collection("tasks").add(task).get();
+            }
+
+            saveDistribution(db, assignmentId, newDistribution);
+            return getTasks(assignmentId);
         } catch (Exception e) {
             System.err.println("❌ regenerateTasks error: " + e.getMessage());
-            return Collections.emptyList();
+            throw new RuntimeException("Regenerate failed (AI-only mode): " + e.getMessage(), e);
         }
     }
 
     public List<Map<String, Object>> getDistribution(String assignmentId) {
         try {
+            Firestore db = getDb();
             QuerySnapshot snapshot = db.collection("groupDistributions")
                 .document(assignmentId)
                 .collection("assignments")
@@ -152,11 +171,12 @@ public class GroupService {
 
     public List<Map<String, Object>> regenerateDistribution(String assignmentId) {
         try {
+            Firestore db = getDb();
             List<Map<String, Object>> tasks = getTasks(assignmentId);
-            List<Map<String, Object>> members = getMembers(assignmentId);
+            List<Map<String, Object>> members = getMembers(db, assignmentId);
             List<Map<String, Object>> distribution =
                 aiService.distributeTasks(tasks, members);
-            saveDistribution(assignmentId, distribution);
+            saveDistribution(db, assignmentId, distribution);
             return distribution;
         } catch (Exception e) {
             System.err.println("❌ regenerateDistribution error: " + e.getMessage());
@@ -166,10 +186,11 @@ public class GroupService {
 
     public Map<String, Object> getSetup(String assignmentId) {
         try {
+            Firestore db = getDb();
             DocumentSnapshot doc = db.collection("groups")
                 .document(assignmentId).get().get();
             Map<String, Object> data = new HashMap<>(doc.getData());
-            data.put("members", getMembers(assignmentId));
+            data.put("members", getMembers(db, assignmentId));
             return data;
         } catch (Exception e) {
             System.err.println("❌ getSetup error: " + e.getMessage());
@@ -179,10 +200,10 @@ public class GroupService {
 
     public String updateGroupAssignment(String assignmentId, Map<String, Object> body) {
         try {
+            Firestore db = getDb();
             List<Map<String, Object>> members =
                 (List<Map<String, Object>>) body.get("members");
 
-            // ── FIX: recompute memberInitials on update ──
             List<String> memberInitials = members.stream()
                 .map(m -> {
                     String name = (String) m.get("name");
@@ -194,48 +215,104 @@ public class GroupService {
             Map<String, Object> groupData = new HashMap<>(body);
             groupData.put("memberInitials", memberInitials);
             db.collection("groups").document(assignmentId).set(groupData).get();
+            System.out.println("✅ Updated group data for assignment: " + assignmentId);
 
             String brief = (String) body.get("brief");
-            List<Map<String, Object>> tasks = aiService.extractTasks(brief, members);
-            deleteSubcollection("groupTasks", assignmentId, "tasks");
+            System.out.println("🤖 Generating tasks + distribution with mega-prompt...");
+            List<Map<String, Object>> distribution = aiService.generateFullPlan(brief, members);
+            if (distribution == null || distribution.isEmpty()) {
+                System.err.println("❌ AI service returned empty distribution");
+                throw new RuntimeException("AI generation failed - no distribution generated");
+            }
+
+            List<Map<String, Object>> tasks = flattenTasksFromDistribution(distribution);
+            if (tasks.isEmpty()) {
+                System.err.println("❌ AI service returned distribution but no tasks");
+                throw new RuntimeException("AI generation failed - no tasks generated");
+            }
+
+            System.out.println("✅ AI generation returned " + tasks.size() + " tasks and " + distribution.size() + " members");
+            deleteSubcollection(db, "groupTasks", assignmentId, "tasks");
             for (int i = 0; i < tasks.size(); i++) {
-                tasks.get(i).put("id", i + 1);
                 db.collection("groupTasks").document(assignmentId)
                   .collection("tasks").add(tasks.get(i)).get();
             }
-            List<Map<String, Object>> distribution =
-                aiService.distributeTasks(tasks, members);
-            saveDistribution(assignmentId, distribution);
+            System.out.println("✅ Tasks saved to Firestore");
+
+            saveDistribution(db, assignmentId, distribution);
+            System.out.println("✅ updateGroupAssignment completed successfully");
             return assignmentId;
         } catch (Exception e) {
             System.err.println("❌ updateGroupAssignment error: " + e.getMessage());
-            throw new RuntimeException("Failed to update group assignment", e);
+            e.printStackTrace();
+            throw new RuntimeException("Failed to update group assignment: " + e.getMessage(), e);
         }
     }
 
     public void confirmAndSync(String assignmentId, String userId) {
         try {
-            List<Map<String, Object>> distribution = getDistribution(assignmentId);
-            for (Map<String, Object> member : distribution) {
-                List<Map<String, Object>> tasks =
-                    (List<Map<String, Object>>) member.get("tasks");
-                for (Map<String, Object> task : tasks) {
-                    Map<String, Object> plannerTask = new HashMap<>();
-                    plannerTask.put("userId", userId);
-                    plannerTask.put("title", task.get("title"));
-                    plannerTask.put("assignmentId", assignmentId);
-                    plannerTask.put("assignedTo", member.get("name"));
-                    plannerTask.put("synced", true);
-                    db.collection("plannerTasks").add(plannerTask).get();
+            Firestore db = getDb();
+            System.out.println("🔄 confirmAndSync called for assignment: " + assignmentId);
+            
+            // Check if document exists, create empty one first if needed
+            boolean updated = false;
+            try {
+                System.out.println("  Attempting to update existing document...");
+                db.collection("groupDistributions").document(assignmentId).update("confirmed", true).get();
+                System.out.println("✅ Distribution confirmed (updated existing)");
+                updated = true;
+            } catch (Exception updateEx) {
+                System.out.println("⚠️ Update failed: " + updateEx.getMessage());
+                System.out.println("  Creating new document instead...");
+                
+                // If update fails (document doesn't exist), create it
+                Map<String, Object> data = new HashMap<>();
+                data.put("confirmed", true);
+                data.put("confirmedAt", System.currentTimeMillis());
+                data.put("assignmentId", assignmentId);
+                
+                try {
+                    db.collection("groupDistributions").document(assignmentId).set(data).get();
+                    System.out.println("✅ Distribution confirmed (created new)");
+                    updated = true;
+                } catch (Exception setEx) {
+                    System.out.println("❌ Set operation also failed: " + setEx.getMessage());
+                    throw setEx;
                 }
             }
+            
+            if (!updated) {
+                throw new RuntimeException("Failed to confirm distribution - neither update nor set succeeded");
+            }
         } catch (Exception e) {
-            System.err.println("❌ confirmAndSync error: " + e.getMessage());
-            throw new RuntimeException("Planner sync failed", e);
+            System.err.println("❌ confirmAndSync error: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Distribution confirmation failed: " + e.getMessage(), e);
         }
     }
 
-    private List<Map<String, Object>> getMembers(String assignmentId) throws Exception {
+    public void deleteGroupAssignment(String assignmentId) {
+        try {
+            Firestore db = getDb();
+
+            deleteSubcollection(db, "groups", assignmentId, "members");
+            deleteSubcollection(db, "groupTasks", assignmentId, "tasks");
+            deleteSubcollection(db, "groupDistributions", assignmentId, "assignments");
+
+            db.collection("groups").document(assignmentId).delete().get();
+            db.collection("groupTasks").document(assignmentId).delete().get();
+            db.collection("groupDistributions").document(assignmentId).delete().get();
+
+            System.out.println("✅ Group assignment deleted (planner tasks not affected)");
+        } catch (Exception e) {
+            System.err.println("❌ deleteGroupAssignment error: " + e.getMessage());
+            throw new RuntimeException("Failed to delete group assignment", e);
+        }
+    }
+
+    // ── private helpers (all take db as param to reuse the same instance) ──
+
+    private List<Map<String, Object>> getMembers(Firestore db, String assignmentId) throws Exception {
         QuerySnapshot snapshot = db.collection("groups")
             .document(assignmentId)
             .collection("members")
@@ -245,7 +322,7 @@ public class GroupService {
             .collect(Collectors.toList());
     }
 
-    private void deleteSubcollection(String collection, String docId,
+    private void deleteSubcollection(Firestore db, String collection, String docId,
                                       String subcollection) throws Exception {
         QuerySnapshot snapshot = db.collection(collection)
             .document(docId)
@@ -256,12 +333,61 @@ public class GroupService {
         }
     }
 
-    private void saveDistribution(String assignmentId,
+    private void saveDistribution(Firestore db, String assignmentId,
                                    List<Map<String, Object>> distribution) throws Exception {
-        deleteSubcollection("groupDistributions", assignmentId, "assignments");
+        deleteSubcollection(db, "groupDistributions", assignmentId, "assignments");
         for (Map<String, Object> member : distribution) {
             db.collection("groupDistributions").document(assignmentId)
               .collection("assignments").add(member).get();
         }
+    }
+
+    private List<Map<String, Object>> flattenTasksFromDistribution(List<Map<String, Object>> distribution) {
+        List<Map<String, Object>> flat = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+
+        for (Map<String, Object> member : distribution) {
+            Object tasksRaw = member.get("tasks");
+            if (!(tasksRaw instanceof List<?> taskItems)) continue;
+
+            for (Object item : taskItems) {
+                if (!(item instanceof Map<?, ?> taskMap)) continue;
+
+                Object rawTitle = taskMap.containsKey("title") ? taskMap.get("title") : "Task";
+                Object rawDescription = taskMap.containsKey("description") ? taskMap.get("description") : "";
+                String title = String.valueOf(rawTitle);
+                String description = String.valueOf(rawDescription);
+                String signature = (title + "||" + description).toLowerCase(Locale.ROOT);
+                if (!seen.add(signature)) continue;
+
+                Map<String, Object> task = new LinkedHashMap<>();
+                task.put("title", title);
+                task.put("description", description);
+                Object rawEffort = taskMap.containsKey("effort") ? taskMap.get("effort") : "Medium";
+                task.put("effort", String.valueOf(rawEffort));
+                task.put("dependencies", taskMap.get("dependencies"));
+                flat.add(task);
+            }
+        }
+
+        for (int i = 0; i < flat.size(); i++) {
+            flat.get(i).put("id", i + 1);
+        }
+
+        return flat;
+    }
+
+    private int parseTaskId(Map<String, Object> task) {
+        Object rawId = task.get("id");
+        if (rawId instanceof Integer i) return i;
+        if (rawId instanceof Number n) return n.intValue();
+        if (rawId instanceof String s) {
+            try {
+                return Integer.parseInt(s);
+            } catch (NumberFormatException ignored) {
+                return Integer.MAX_VALUE;
+            }
+        }
+        return Integer.MAX_VALUE;
     }
 }

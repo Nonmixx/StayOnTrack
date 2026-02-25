@@ -1,0 +1,14 @@
+# Global secret safeguards (repo-wide)
+**/firebase-key.json
+**/application-local.properties
+**/*.p12
+**/*.pem
+**/*.key
+**/*.jks
+**/*.keystore
+**/.env
+**/.env.*
+
+# Keep examples/templates trackable
+!**/*.example
+!**/*.sample

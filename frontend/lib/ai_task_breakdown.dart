@@ -12,6 +12,7 @@ class TaskBreakdownPage extends StatefulWidget {
 class _TaskBreakdownPageState extends State<TaskBreakdownPage> {
   List<GroupTask> _tasks = [];
   bool _isLoading = true;
+  bool _isRegenerating = false;
   String _assignmentId = '';
 
   Color _effortColor(String effort) {
@@ -36,6 +37,16 @@ class _TaskBreakdownPageState extends State<TaskBreakdownPage> {
     }
   }
 
+  String _formatDependencies(String? depStr) {
+    if (depStr == null || depStr.isEmpty) return 'None';
+    try {
+      final depId = int.parse(depStr);
+      return 'Task $depId';
+    } catch (_) {
+      return depStr;
+    }
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -47,9 +58,48 @@ class _TaskBreakdownPageState extends State<TaskBreakdownPage> {
     }
   }
 
+  Future<String> _resolveAssignmentIdIfMissing() async {
+    if (_assignmentId.isNotEmpty) return _assignmentId;
+
+    final assignments = await GroupApi.getGroupAssignments();
+    if (assignments.isEmpty) return '';
+
+    assignments.sort((a, b) {
+      DateTime parseOrMax(String raw) {
+        try {
+          return DateTime.parse(raw);
+        } catch (_) {
+          return DateTime(9999, 12, 31, 23, 59, 59);
+        }
+      }
+
+      return parseOrMax(a.deadline).compareTo(parseOrMax(b.deadline));
+    });
+
+    return assignments.first.id;
+  }
+
   Future<void> _loadTasks() async {
     setState(() => _isLoading = true);
+    _assignmentId = await _resolveAssignmentIdIfMissing();
+    if (_assignmentId.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No assignment found. Please create one first.'),
+            backgroundColor: Color(0xFFE70030),
+          ),
+        );
+      }
+      setState(() {
+        _tasks = [];
+        _isLoading = false;
+      });
+      return;
+    }
+
     final tasks = await GroupApi.getTaskBreakdown(_assignmentId);
+    tasks.sort((a, b) => a.id.compareTo(b.id));
     setState(() {
       _tasks = tasks;
       _isLoading = false;
@@ -57,12 +107,54 @@ class _TaskBreakdownPageState extends State<TaskBreakdownPage> {
   }
 
   Future<void> _regenerateTasks() async {
-    setState(() => _isLoading = true);
-    final tasks = await GroupApi.regenerateTasks(_assignmentId);
-    setState(() {
-      _tasks = tasks;
-      _isLoading = false;
-    });
+    if (_isRegenerating) return;
+    setState(() => _isRegenerating = true);
+    try {
+      final tasks = await GroupApi.regenerateTasks(_assignmentId);
+      tasks.sort((a, b) => a.id.compareTo(b.id));
+      final error = lastRegenerateTasksError;
+
+      if (!mounted) return;
+      if (tasks.isNotEmpty) {
+        setState(() => _tasks = tasks);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Tasks regenerated.'),
+            backgroundColor: Color(0xFF008236),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } else if (error != null && error.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(error),
+            backgroundColor: const Color(0xFFE70030),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Regenerate failed. Please try again.'),
+            backgroundColor: Color(0xFFE70030),
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Regenerate failed: $e'),
+          backgroundColor: const Color(0xFFE70030),
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isRegenerating = false);
+      }
+    }
   }
 
   @override
@@ -80,6 +172,13 @@ class _TaskBreakdownPageState extends State<TaskBreakdownPage> {
           ),
           onPressed: () => Navigator.pop(context),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: Color(0xFF2D2D3A), size: 22),
+            onPressed: _isLoading ? null : _loadTasks,
+            tooltip: 'Refresh',
+          ),
+        ],
         centerTitle: true,
         title: const Text(
           'AI Task Breakdown',
@@ -99,7 +198,6 @@ class _TaskBreakdownPageState extends State<TaskBreakdownPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Info note
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -145,7 +243,6 @@ class _TaskBreakdownPageState extends State<TaskBreakdownPage> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Empty state
                   if (_tasks.isEmpty)
                     Container(
                       width: double.infinity,
@@ -185,7 +282,6 @@ class _TaskBreakdownPageState extends State<TaskBreakdownPage> {
 
                   const SizedBox(height: 8),
 
-                  // Action buttons
                   Row(
                     children: [
                       Expanded(
@@ -250,30 +346,42 @@ class _TaskBreakdownPageState extends State<TaskBreakdownPage> {
                             ],
                           ),
                           child: ElevatedButton(
-                            onPressed: _regenerateTasks,
+                            onPressed: _isRegenerating
+                                ? null
+                                : _regenerateTasks,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF9C9EC3),
                               foregroundColor: const Color(0xFFFFFFFF),
+                              disabledBackgroundColor: const Color(0xFFD4D6E8),
+                              disabledForegroundColor: const Color(0xFFFFFFFF),
                               elevation: 0,
                               padding: const EdgeInsets.symmetric(vertical: 14),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8),
                               ),
                             ),
-                            child: const Text(
-                              'Regenerate Tasks',
-                              style: TextStyle(
-                                fontFamily: 'Arimo',
-                                fontSize: 14,
-                                fontWeight: FontWeight.w400,
-                              ),
-                            ),
+                            child: _isRegenerating
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Text(
+                                    'Regenerate Tasks',
+                                    style: TextStyle(
+                                      fontFamily: 'Arimo',
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w400,
+                                    ),
+                                  ),
                           ),
                         ),
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 16),
                 ],
               ),
@@ -366,6 +474,7 @@ class _TaskBreakdownPageState extends State<TaskBreakdownPage> {
                 Expanded(
                   child: Text(
                     task.title,
+                    // ── CHANGED: removed maxLines: 1 and overflow: ellipsis ──
                     style: const TextStyle(
                       fontFamily: 'Arimo',
                       fontSize: 17,
@@ -434,7 +543,7 @@ class _TaskBreakdownPageState extends State<TaskBreakdownPage> {
                       ),
                     ),
                     child: Text(
-                      task.dependencies!,
+                      _formatDependencies(task.dependencies),
                       style: const TextStyle(
                         fontFamily: 'Arimo',
                         fontSize: 12,
