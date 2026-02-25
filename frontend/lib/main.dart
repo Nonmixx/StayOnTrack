@@ -19,9 +19,13 @@ import 'focus_and_energy_profile_page.dart';
 import 'add_deadline_page.dart';
 import 'edit_deadlines_page.dart';
 import 'routes.dart';
+import 'user_session.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await UserSession.restore();
+
   runApp(const MyApp());
 }
 
@@ -85,8 +89,6 @@ class MainNavigation extends StatefulWidget {
 
 class _MainNavigationState extends State<MainNavigation> {
   int _selectedIndex = 0;
-  int _plannerRefreshTrigger = 0;
-  int _homeRefreshTrigger = 0;
 
   static const int _settingsIndex = 3;
 
@@ -103,23 +105,11 @@ class _MainNavigationState extends State<MainNavigation> {
     AppNav.navigateToGroup = () => setState(() => _selectedIndex = _groupIndex);
     AppNav.navigateToSettings = () =>
         setState(() => _selectedIndex = _settingsIndex);
-    AppNav.onReturnFromSetup = () {
-      setState(() {
-        _homeRefreshTrigger++;
-        _plannerRefreshTrigger++;
-      });
-    };
-    AppNav.onPlanRegenerated = () {
-      setState(() {
-        _homeRefreshTrigger++;
-        _plannerRefreshTrigger++;
-      });
-    };
   }
 
-  List<Widget> get _pages => [
-    HomePage(refreshTrigger: _homeRefreshTrigger),
-    PlannerPage(refreshTrigger: _plannerRefreshTrigger),
+  final List<Widget> _pages = [
+    const HomePage(),
+    const PlannerPage(),
     const GroupPage(),
     const SettingsPage(),
   ];
@@ -140,8 +130,6 @@ class _MainNavigationState extends State<MainNavigation> {
         onTap: (index) {
           setState(() {
             _selectedIndex = index;
-            if (index == _plannerIndex) _plannerRefreshTrigger++;
-            if (index == _homeIndex) _homeRefreshTrigger++;
           });
         },
         items: const [

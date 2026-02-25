@@ -98,30 +98,6 @@ class _NotificationSettingsPageState
           style: TextStyle(color: Colors.black87, fontSize: 18, fontWeight: FontWeight.w600),
         ),
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: 3,
-        selectedItemColor: Colors.purple,
-        unselectedItemColor: Colors.grey,
-        showSelectedLabels: true,
-        showUnselectedLabels: true,
-        type: BottomNavigationBarType.fixed,
-        selectedLabelStyle: _arimo(12),
-        unselectedLabelStyle: _arimo(12),
-        onTap: (index) {
-          switch (index) {
-            case 0: Navigator.pushReplacementNamed(context, '/home');    break;
-            case 1: Navigator.pushReplacementNamed(context, '/planner'); break;
-            case 2: Navigator.pushReplacementNamed(context, '/group');   break;
-            case 3: Navigator.pop(context); break;
-          }
-        },
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_outlined),           label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.calendar_today_outlined), label: 'Planner'),
-          BottomNavigationBarItem(icon: Icon(Icons.group_outlined),          label: 'Group'),
-          BottomNavigationBarItem(icon: Icon(Icons.settings_outlined),       label: 'Settings'),
-        ],
-      ),
       body: Column(
         children: [
           Container(

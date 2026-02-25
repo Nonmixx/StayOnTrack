@@ -253,9 +253,9 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
           ),
         );
         // Brief delay when in setup flow so Firestore has the deadline before generatePlan fetches it
-        final routeArgs =
+        final args =
             ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-        final fromSetup = routeArgs?['fromHomeAdd'] != true;
+        final fromSetup = args?['fromHomeAdd'] != true;
         if (fromSetup) await Future.delayed(const Duration(milliseconds: 500));
         final plan = await PlannerApi.generatePlan(availableHours: 20);
         AppNav.onPlanRegenerated?.call();
