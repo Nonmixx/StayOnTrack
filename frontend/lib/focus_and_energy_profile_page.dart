@@ -52,10 +52,43 @@ class _FocusAndEnergyProfilePageState extends State<FocusAndEnergyProfilePage> {
   @override
   void initState() {
     super.initState();
-    _peakFocusIndices.add(3);   // Evening
-    _lowEnergyIndices.add(2);   // Afternoon (different from peak)
-    _studyDurationIndex = 2;    // 45 minutes selected (index 2 in new list)
+    _peakFocusIndices.add(3);   // Default: Evening
+    _lowEnergyIndices.add(2);   // Default: Afternoon
+    _studyDurationIndex = 2;    // Default: 45 minutes
     _otherDurationController.addListener(() => setState(() {}));
+    _loadExistingProfile();
+  }
+
+  /// Restore saved focus profile when returning to this page (e.g. from Semester Setup flow).
+  Future<void> _loadExistingProfile() async {
+    final profiles = await FocusApi.getFocusProfiles();
+    if (!mounted || profiles.isEmpty) return;
+    final p = profiles.first;
+    setState(() {
+      _peakFocusIndices.clear();
+      for (final label in p.peakFocusTimes ?? <String>[]) {
+        final i = _peakFocusOptions.indexOf(label);
+        if (i >= 0) _peakFocusIndices.add(i);
+      }
+      if (_peakFocusIndices.isEmpty) _peakFocusIndices.add(3);
+
+      _lowEnergyIndices.clear();
+      for (final label in p.lowEnergyTimes ?? <String>[]) {
+        final i = _peakFocusOptions.indexOf(label);
+        if (i >= 0) _lowEnergyIndices.add(i);
+      }
+      if (_lowEnergyIndices.isEmpty) _lowEnergyIndices.add(2);
+
+      final duration = p.typicalStudyDuration?.trim() ?? '';
+      final optionIndex = _studyDurationOptions.indexOf(duration);
+      if (optionIndex >= 0) {
+        _studyDurationIndex = optionIndex;
+        if (optionIndex == _studyDurationOptions.length - 1) _otherDurationController.clear();
+      } else if (duration.isNotEmpty) {
+        _studyDurationIndex = _studyDurationOptions.length - 1;
+        _otherDurationController.text = duration;
+      }
+    });
   }
 
   @override
@@ -123,19 +156,34 @@ class _FocusAndEnergyProfilePageState extends State<FocusAndEnergyProfilePage> {
     );
     try {
       final profiles = await FocusApi.getFocusProfiles();
+      bool focusSaved = false;
       if (profiles.isEmpty) {
-        await FocusApi.createFocusProfile(
+        final created = await FocusApi.createFocusProfile(
           peakFocusTimes: _peakFocusLabels,
           lowEnergyTimes: _lowEnergyLabels,
           typicalStudyDuration: _typicalStudyDuration,
         );
+        focusSaved = created != null;
       } else {
-        await FocusApi.updateFocusProfile(profiles.first.id,
+        final updated = await FocusApi.updateFocusProfile(profiles.first.id,
           peakFocusTimes: _peakFocusLabels,
           lowEnergyTimes: _lowEnergyLabels,
           typicalStudyDuration: _typicalStudyDuration,
         );
+        focusSaved = updated != null;
       }
+      if (!focusSaved && context.mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to save focus profile to database. Check that the backend is running and Firestore is configured.'),
+            duration: Duration(seconds: 5),
+          ),
+        );
+        return;
+      }
+      // Small delay to ensure Firestore has persisted the focus profile before plan generation reads it
+      await Future.delayed(const Duration(milliseconds: 500));
       final plan = await PlannerApi.generatePlan(availableHours: 20);
       if (context.mounted) Navigator.of(context).pop();
       if (context.mounted) {

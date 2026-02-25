@@ -6,6 +6,7 @@ import 'data/deadline_store.dart';
 
 /// Add Deadline screen. Opened from Home or Edit Deadlines.
 /// [editIndex] and [editId] set when editing an existing deadline.
+/// [initialType] when editing: preserve existing 'exam' or 'assignment' so we do not overwrite an exam as assignment.
 class AddDeadlinePage extends StatefulWidget {
   const AddDeadlinePage({
     super.key,
@@ -16,6 +17,7 @@ class AddDeadlinePage extends StatefulWidget {
     this.initialDueDate,
     this.initialDifficulty,
     this.initialIsIndividual,
+    this.initialType,
   });
 
   final int? editIndex;
@@ -25,6 +27,8 @@ class AddDeadlinePage extends StatefulWidget {
   final DateTime? initialDueDate;
   final String? initialDifficulty;
   final bool? initialIsIndividual;
+  /// When editing, use this type in updateDeadline so an exam is not overwritten as assignment.
+  final String? initialType;
 
   @override
   State<AddDeadlinePage> createState() => _AddDeadlinePageState();
@@ -93,12 +97,17 @@ class _AddDeadlinePageState extends State<AddDeadlinePage> {
     if (course.isEmpty || title.isEmpty) return;
 
     if (_isEditMode && widget.editId != null) {
+      // Preserve existing type when editing so an exam is not overwritten as assignment.
+      final type = (widget.initialType ?? 'assignment').toString().trim().toLowerCase();
+      final deadlineType = type == 'exam' ? 'exam' : 'assignment';
       final updated = await PlannerApi.updateDeadline(
         id: widget.editId!,
         title: title,
         course: course,
         dueDate: _dueDate,
-        type: 'assignment',
+        type: deadlineType,
+        difficulty: _selectedDifficulty,
+        isIndividual: _isIndividual,
       );
       if (updated != null && mounted) {
         final item = DeadlineItem(
@@ -108,11 +117,13 @@ class _AddDeadlinePageState extends State<AddDeadlinePage> {
           dueDate: _dueDate,
           difficulty: _selectedDifficulty ?? 'Medium',
           isIndividual: _isIndividual,
+          type: widget.initialType ?? 'assignment',
         );
         if (widget.editIndex != null) {
           deadlineStore.updateAt(widget.editIndex!, item);
         }
         await PlannerApi.generatePlan(availableHours: 20);
+        AppNav.onPlanRegenerated?.call();
         if (mounted) Navigator.of(context).pop();
       } else if (mounted) {
         _showErrorSnackBar('Failed to update. Please try again.');
@@ -138,6 +149,8 @@ class _AddDeadlinePageState extends State<AddDeadlinePage> {
       course: course,
       dueDate: _dueDate,
       type: 'assignment',
+      difficulty: _selectedDifficulty,
+      isIndividual: _isIndividual,
     );
     if (created != null && mounted) {
       final item = DeadlineItem(
@@ -149,7 +162,13 @@ class _AddDeadlinePageState extends State<AddDeadlinePage> {
         isIndividual: _isIndividual,
       );
       deadlineStore.add(item);
-      await PlannerApi.generatePlan(availableHours: 20);
+      final plan = await PlannerApi.generatePlan(availableHours: 20);
+      AppNav.onPlanRegenerated?.call();
+      if (plan == null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Plan saved but generation failed. Try opening Planner tab to retry.'), backgroundColor: Colors.orange),
+        );
+      }
       _showSuccessDialog();
     } else if (mounted) {
       _showErrorSnackBar('Failed to save. Is the backend running?');
@@ -183,7 +202,7 @@ class _AddDeadlinePageState extends State<AddDeadlinePage> {
                   Navigator.of(context).pop(); // leave Add Deadline page
                   Navigator.of(context).pop(); // leave Edit Deadline/Exam page → home
                 } else {
-                  Navigator.of(context).pop(); // leave Add Deadline page → home
+                  Navigator.of(context).pop(true); // leave Add Deadline page → home, signal refresh
                 }
               },
               child: const Text('OK'),
@@ -191,7 +210,7 @@ class _AddDeadlinePageState extends State<AddDeadlinePage> {
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop(); // close dialog
-                Navigator.of(context).pop(); // leave Add Deadline page
+                Navigator.of(context).pop(true); // leave Add Deadline page, signal refresh
                 if (!fromEditDeadlinesPage) {
                   Navigator.of(context).pushNamed(AppRoutes.editDeadlines);
                 }

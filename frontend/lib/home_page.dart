@@ -8,7 +8,8 @@ import 'widgets/empty_state_card.dart';
 import 'data/deadline_store.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  const HomePage({super.key, this.refreshTrigger = 0});
+  final int refreshTrigger;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -37,6 +38,12 @@ class _HomePageState extends State<HomePage> {
     if (mounted) _loadData();
   }
 
+  @override
+  void didUpdateWidget(HomePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.refreshTrigger != widget.refreshTrigger) _loadData();
+  }
+
   static String _storeTaskId(DeadlineItem item) {
     final due = item.dueDate?.millisecondsSinceEpoch ?? 0;
     return 'store-${item.courseName}|${item.title}|$due';
@@ -44,14 +51,25 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _loadData() async {
     try {
-      var tasks = await PlannerApi.getTodaysTasks();
-      final deadlines = await PlannerApi.getDeadlines();
-      if (tasks.isEmpty && deadlines.isNotEmpty) {
-        await PlannerApi.generatePlan(availableHours: 20);
-        tasks = await PlannerApi.getTodaysTasks();
-      }
-      Deadline? nearest;
+      // Use same data source as weekly planner: get week tasks, then filter to today
       final now = DateTime.now();
+      final weekStart = CalendarUtils.weekStart(now);
+      final weekStartIso = CalendarUtils.toIso(weekStart);
+      var weekTasks = await PlannerApi.getWeekTasks(weekStartIso);
+      final deadlines = await PlannerApi.getDeadlines();
+      if (weekTasks.isEmpty && deadlines.isNotEmpty) {
+        await PlannerApi.generatePlan(availableHours: 20);
+        weekTasks = await PlannerApi.getWeekTasks(weekStartIso);
+      }
+      final todayIso = CalendarUtils.toIso(now);
+      var tasks = weekTasks.where((t) => t.dueDate == todayIso).toList();
+      tasks.sort((a, b) {
+        if (a.scheduledStartTime == null && b.scheduledStartTime == null) return 0;
+        if (a.scheduledStartTime == null) return 1;
+        if (b.scheduledStartTime == null) return -1;
+        return a.scheduledStartTime!.compareTo(b.scheduledStartTime!);
+      });
+      Deadline? nearest;
       for (final d in deadlines) {
         if (d.dueDate == null) continue;
         try {
@@ -72,7 +90,15 @@ class _HomePageState extends State<HomePage> {
           if (due.isBefore(nearestDue)) nearest = d;
         } catch (_) {}
       }
-      List<PlannerTask> displayTasks = tasks;
+      // Deduplicate tasks (same title, course, time slot) - keep first occurrence
+      final seen = <String>{};
+      final displayTasks = <PlannerTask>[];
+      for (final t in tasks) {
+        final key = '${t.title}|${t.course}|${t.dueDate ?? ""}|${t.timeSlotDisplay ?? ""}';
+        if (seen.contains(key)) continue;
+        seen.add(key);
+        displayTasks.add(t);
+      }
       // When API returns no deadlines, compute nearest from store
       if (nearest == null && deadlineStore.items.isNotEmpty) {
         DateTime? nearestDue;
@@ -119,7 +145,7 @@ class _HomePageState extends State<HomePage> {
           _demoCompletedIds.remove(taskId);
         }
         _tasks = _tasks.map((t) {
-          if (t.id == taskId) return PlannerTask(id: t.id, title: t.title, course: t.course, duration: t.duration, completed: completed, dueDate: t.dueDate, scheduledStartTime: t.scheduledStartTime, difficulty: t.difficulty, status: t.status);
+          if (t.id == taskId) return PlannerTask(id: t.id, title: t.title, course: t.course, duration: t.duration, completed: completed, dueDate: t.dueDate, scheduledStartTime: t.scheduledStartTime, difficulty: t.difficulty, isIndividual: t.isIndividual, status: t.status);
           return t;
         }).toList();
       });
@@ -162,9 +188,10 @@ class _HomePageState extends State<HomePage> {
               ),
               const SizedBox(height: 16),
               InkWell(
-                onTap: () {
+                onTap: () async {
                   Navigator.pop(context);
-                  Navigator.pushNamed(context, AppRoutes.addDeadline, arguments: {'fromHomeAdd': true});
+                  final added = await Navigator.pushNamed(context, AppRoutes.addDeadline, arguments: {'fromHomeAdd': true});
+                  if (added == true && mounted) _loadData();
                 },
                 borderRadius: BorderRadius.circular(10),
                 child: Container(
@@ -221,9 +248,10 @@ class _HomePageState extends State<HomePage> {
               ),
               const SizedBox(height: 12),
               InkWell(
-                onTap: () {
+                onTap: () async {
                   Navigator.pop(context);
-                  Navigator.pushNamed(context, AppRoutes.courseAndExamInput, arguments: {'fromHomeAdd': true});
+                  final added = await Navigator.pushNamed(context, AppRoutes.courseAndExamInput, arguments: {'fromHomeAdd': true});
+                  if (added == true && mounted) _loadData();
                 },
                 borderRadius: BorderRadius.circular(10),
                 child: Container(
@@ -307,6 +335,17 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// Avoid showing course name twice for exams (title is already "Course - ExamType").
+  String _nearestDeadlineBannerText() {
+    final d = _nearestDeadline!;
+    final course = d.course.trim();
+    final title = d.title.trim();
+    final namePart = (course.isNotEmpty && title.startsWith(course))
+        ? title
+        : (course.isEmpty ? title : '$course $title');
+    return '$namePart ${_daysUntil(d.dueDate)}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final completedCount = _tasks.where((t) => t.completed).length;
@@ -317,6 +356,7 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
+        automaticallyImplyLeading: false,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -369,7 +409,7 @@ class _HomePageState extends State<HomePage> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            '${_nearestDeadline!.course} ${_nearestDeadline!.title} ${_daysUntil(_nearestDeadline!.dueDate)}',
+                            _nearestDeadlineBannerText(),
                             style: const TextStyle(
                               fontFamily: 'Arimo',
                               fontSize: 14,
@@ -436,7 +476,7 @@ class _HomePageState extends State<HomePage> {
                         EmptyStateCard(
                           icon: Icons.check_circle_outline,
                           title: 'No study plan for today',
-                          subtitle: 'Go to your settings to setup your planner.',
+                          subtitle: 'Go to your settings to setup your planner through Academic Details.',
                           buttonLabel: 'Go to Settings',
                           onButtonTap: () => AppNav.goToSettings(context),
                         )
@@ -451,6 +491,8 @@ class _HomePageState extends State<HomePage> {
                               course: t.course,
                               duration: t.duration,
                               timeSlot: t.timeSlotDisplay,
+                              difficulty: t.difficulty,
+                              isIndividual: t.isIndividual,
                               onChanged: (value) => _toggleTask(t.id, value ?? false),
                             ),
                           );
@@ -553,10 +595,13 @@ class _HomePageState extends State<HomePage> {
                       ),
                       const SizedBox(height: 12),
                       InkWell(
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const WeeklyCheckInPage()),
-                        ),
+                        onTap: () async {
+                          final updated = await Navigator.push<bool>(
+                            context,
+                            MaterialPageRoute(builder: (context) => const WeeklyCheckInPage()),
+                          );
+                          if (updated == true && mounted) _loadData();
+                        },
                         borderRadius: BorderRadius.circular(8),
                         child: Container(
                           width: double.infinity,
@@ -602,6 +647,8 @@ class TaskItemWidget extends StatelessWidget {
   final String course;
   final String duration;
   final String? timeSlot;
+  final String? difficulty;
+  final bool? isIndividual;
   final ValueChanged<bool?>? onChanged;
 
   const TaskItemWidget({
@@ -611,6 +658,8 @@ class TaskItemWidget extends StatelessWidget {
     required this.course,
     required this.duration,
     this.timeSlot,
+    this.difficulty,
+    this.isIndividual,
     this.onChanged,
   }) : super(key: key);
 
@@ -704,10 +753,80 @@ class TaskItemWidget extends StatelessWidget {
                     ),
                   ],
                 ),
+                if ((difficulty != null && difficulty!.isNotEmpty) || isIndividual != null) ...[
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      if (difficulty != null && difficulty!.isNotEmpty)
+                        _difficultyChip(difficulty!),
+                      if (isIndividual != null)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: (isIndividual == true ? const Color(0xFFE8ECF4) : const Color(0xFFE8F4EC)),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            isIndividual == true ? 'Individual' : 'Group',
+                            style: TextStyle(
+                              fontFamily: 'Arimo',
+                              fontSize: 11,
+                              color: isIndividual == true ? const Color(0xFF7E93CC) : const Color(0xFF4A9B6E),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  static Widget _difficultyChip(String difficulty) {
+    Color bg;
+    Color textColor;
+    String label = difficulty;
+    if (difficulty.endsWith('%')) {
+      bg = const Color(0xFFF3E8F4);
+      textColor = const Color(0xFF8B5A9B);
+      label = 'Weight $difficulty';
+    } else {
+      switch (difficulty) {
+        case 'Easy':
+          bg = const Color(0xFFE8F4EC);
+          textColor = const Color(0xFF4A9B6E);
+          break;
+        case 'Hard':
+          bg = const Color(0xFFFEF2F2);
+          textColor = const Color(0xFFC10007);
+          break;
+        default:
+          bg = const Color(0xFFFEF9E8);
+          textColor = const Color(0xFFB8860B);
+          break;
+      }
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontFamily: 'Arimo',
+          fontSize: 11,
+          fontWeight: FontWeight.w500,
+          color: textColor,
+        ),
       ),
     );
   }

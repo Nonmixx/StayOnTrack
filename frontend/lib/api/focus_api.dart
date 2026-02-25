@@ -1,12 +1,10 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-
+import 'package:flutter_stayontrack/user_session.dart';
 import 'planner_api.dart' show baseUrl;
 
 class FocusApi {
-  static String _userId = 'default-user';
-
-  static void setUserId(String userId) => _userId = userId;
+  static String get _userId => UserSession.uid ?? 'default-user';
 
   static Future<FocusProfile?> createFocusProfile({
     required List<String> peakFocusTimes,

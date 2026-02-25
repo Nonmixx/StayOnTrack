@@ -40,7 +40,7 @@ class _WeeklyCheckInPageState extends State<WeeklyCheckInPage> {
             backgroundColor: week != null ? Colors.green : Colors.red,
           ),
         );
-        if (week != null) Navigator.pop(context);
+        if (week != null) Navigator.pop(context, true);
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);

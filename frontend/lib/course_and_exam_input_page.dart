@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'app_nav.dart';
 import 'routes.dart';
 import 'api/planner_api.dart';
 import 'data/deadline_store.dart';
+import 'utils/calendar_utils.dart';
 
 /// Course and Exam Input screen (Exam Schedule). Shown after Semester Setup.
 class CourseAndExamInputPage extends StatefulWidget {
@@ -38,6 +40,73 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
     _selectedExamType ??= _examTypes.first;
     _weightController.text = '0';
     _weightController.addListener(_syncWeightFromController);
+    _loadExams();
+  }
+
+  Future<void> _loadExams() async {
+    final list = await PlannerApi.getDeadlines();
+    if (!mounted) return;
+    final exams = list
+        .where((d) => d.type == 'exam')
+        .map((d) => _deadlineToExamEntry(d))
+        .toList();
+    setState(() {
+      _exams.clear();
+      _exams.addAll(exams);
+    });
+    if (mounted) _applyEditArgs();
+  }
+
+  void _applyEditArgs() {
+    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    final editId = args?['editDeadlineId'] as String?;
+    if (editId == null || editId.isEmpty) return;
+    final idx = _exams.indexWhere((e) => e.id == editId);
+    if (idx < 0) return;
+    final e = _exams[idx];
+    setState(() {
+      _editingIndex = idx;
+      _courseNameController.text = e.courseName;
+      _selectedExamType = _examTypes.contains(e.examType) ? e.examType : 'Other';
+      _otherTypeController.text = _examTypes.contains(e.examType) ? '' : e.examType;
+      _examDate = e.date;
+      _weightValue = e.weight ?? 0;
+      _weightController.text = '${_weightValue}';
+    });
+  }
+
+  static _ExamEntry _deadlineToExamEntry(Deadline d) {
+    String courseName = d.course;
+    String examType = 'Other';
+    if (d.title.contains(' - ')) {
+      final parts = d.title.split(' - ');
+      if (parts.length >= 2) {
+        courseName = parts[0].trim();
+        examType = parts.sublist(1).join(' - ').trim();
+      }
+    }
+    int? weight;
+    if (d.difficulty != null && d.difficulty!.endsWith('%')) {
+      weight = int.tryParse(d.difficulty!.replaceAll('%', '').trim());
+    }
+    return _ExamEntry(
+      id: d.id,
+      courseName: courseName,
+      examType: examType,
+      date: _parseDueDate(d.dueDate),
+      weight: weight,
+    );
+  }
+
+  static DateTime? _parseDueDate(String? s) {
+    if (s == null || s.isEmpty) return null;
+    final parts = s.split('-');
+    if (parts.length != 3) return null;
+    final y = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    final d = int.tryParse(parts[2]);
+    if (y == null || m == null || d == null) return null;
+    return DateTime(y, m, d);
   }
 
   void _syncWeightFromController() {
@@ -58,10 +127,7 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
 
   String _formatDate(DateTime? date) {
     if (date == null) return '';
-    final m = date.month.toString().padLeft(2, '0');
-    final d = date.day.toString().padLeft(2, '0');
-    final y = date.year.toString();
-    return '$m/$d/$y';
+    return CalendarUtils.formatDisplay(date);
   }
 
   static const _monthNames = [
@@ -97,18 +163,61 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
   Future<void> _addExam() async {
     final course = _courseNameController.text.trim();
     if (course.isEmpty) return;
+    if (_examDate == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please select an exam date.')),
+        );
+      }
+      return;
+    }
     final entry = _ExamEntry(
+      id: _editingIndex != null ? _exams[_editingIndex!].id : null,
       courseName: course,
       examType: _effectiveExamType,
       date: _examDate,
       weight: _weightValue,
     );
+    if (_editingIndex != null && entry.id != null && entry.id!.isNotEmpty) {
+      final updated = await PlannerApi.updateDeadline(
+        id: entry.id!,
+        title: '$course - ${entry.examType}',
+        course: course,
+        dueDate: entry.date,
+        type: 'exam',
+        difficulty: entry.weight != null && entry.weight! > 0 ? '${entry.weight}%' : null,
+      );
+      if (updated != null) {
+        final idx = deadlineStore.items.indexWhere((i) => i.id == entry.id);
+        if (idx >= 0) {
+          deadlineStore.updateAt(idx, DeadlineItem(
+            id: updated.id,
+            title: '$course - ${entry.examType}',
+            courseName: course,
+            dueDate: entry.date,
+            difficulty: entry.weight != null ? '${entry.weight}%' : '—',
+            isIndividual: true,
+            type: 'exam',
+          ));
+        }
+        await PlannerApi.generatePlan(availableHours: 20);
+        AppNav.onPlanRegenerated?.call();
+      }
+      if (!mounted) return;
+      setState(() {
+        _exams[_editingIndex!] = entry;
+        _editingIndex = null;
+        _clearForm();
+      });
+      return;
+    }
     if (_editingIndex == null) {
       final created = await PlannerApi.createDeadline(
         title: '$course - ${entry.examType}',
         course: course,
         dueDate: entry.date,
         type: 'exam',
+        difficulty: entry.weight != null && entry.weight! > 0 ? '${entry.weight}%' : null,
       );
       if (created != null) {
         deadlineStore.add(DeadlineItem(
@@ -119,7 +228,27 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
           difficulty: entry.weight != null ? '${entry.weight}%' : '—',
           isIndividual: true,
         ));
-        await PlannerApi.generatePlan(availableHours: 20);
+        // Brief delay when in setup flow so Firestore has the deadline before generatePlan fetches it
+        final fromSetup = ModalRoute.of(context)?.settings.arguments?['fromHomeAdd'] != true;
+        if (fromSetup) await Future.delayed(const Duration(milliseconds: 500));
+        final plan = await PlannerApi.generatePlan(availableHours: 20);
+        AppNav.onPlanRegenerated?.call();
+        if (plan == null && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Plan saved but generation failed. Try opening Planner tab to retry.'), backgroundColor: Colors.orange),
+          );
+        }
+        setState(() {
+          _exams.add(_ExamEntry(
+            id: created.id,
+            courseName: entry.courseName,
+            examType: entry.examType,
+            date: entry.date,
+            weight: entry.weight,
+          ));
+          _clearForm();
+        });
+        return;
       }
     }
     setState(() {
@@ -154,7 +283,12 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
     setState(() => _editingIndex = index);
   }
 
-  void _deleteExam(int index) {
+  Future<void> _deleteExam(int index) async {
+    final entry = _exams[index];
+    if (entry.id != null && entry.id!.isNotEmpty) {
+      await PlannerApi.deleteDeadline(entry.id!);
+    }
+    if (!mounted) return;
     setState(() {
       _exams.removeAt(index);
       if (_editingIndex == index) {
@@ -264,7 +398,7 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
                           borderRadius: BorderRadius.circular(8),
                           child: InputDecorator(
                             decoration: InputDecoration(
-                              hintText: 'mm/dd/yyyy',
+                              hintText: 'dd/mm/yyyy',
                               hintStyle: const TextStyle(color: _hintGray),
                               filled: true,
                               fillColor: Colors.grey.shade50,
@@ -403,14 +537,14 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
                 ),
                 const SizedBox(height: 32),
 
-                // Footer: Skip always allowed; Next only when at least one exam is added
+                // Footer: Skip/Next go to Assignments page (stack preserved so Back returns here with state)
                 Row(
                   children: [
                     Expanded(
                       child: SizedBox(
                         height: 52,
                         child: ElevatedButton(
-                          onPressed: () => _goToHome(context),
+                          onPressed: () => _goToAssignments(context),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: _skipButtonColor,
                             foregroundColor: Colors.white,
@@ -428,7 +562,7 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
                       child: SizedBox(
                         height: 52,
                         child: ElevatedButton(
-                          onPressed: _exams.isNotEmpty ? () => _goToHome(context) : null,
+                          onPressed: _exams.isNotEmpty ? () => _goToAssignments(context) : null,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: _nextButtonColor,
                             disabledBackgroundColor: Colors.grey.shade300,
@@ -453,12 +587,9 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
     );
   }
 
-  void _goToHome(BuildContext context) {
-    // TODO: Persist exams if needed
-    Navigator.of(context).pushNamedAndRemoveUntil(
-      AppRoutes.home,
-      (route) => false,
-    );
+  /// Navigate to Assignments step; use pushNamed so Back returns to this page with state preserved.
+  void _goToAssignments(BuildContext context) {
+    Navigator.of(context).pushNamed(AppRoutes.assignmentAndProject);
   }
 
   InputDecoration _inputDecoration({String? hint}) {
@@ -488,12 +619,14 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
 }
 
 class _ExamEntry {
+  final String? id; // backend deadline id; set when created or loaded
   final String courseName;
   final String examType;
   final DateTime? date;
   final int? weight;
 
   _ExamEntry({
+    this.id,
     required this.courseName,
     required this.examType,
     this.date,

@@ -24,6 +24,13 @@ public class SemesterController {
             @RequestParam(defaultValue = "default-user") String userId) {
         try {
             semester.setUserId(userId);
+            // If a semester for this user already exists, update it to avoid duplicates when navigating back and forth.
+            List<Semester> existing = firestoreService.getSemestersByUserId(userId);
+            if (!existing.isEmpty()) {
+                String existingId = existing.get(0).getId();
+                Semester updated = firestoreService.updateSemester(existingId, semester);
+                return ResponseEntity.ok(updated);
+            }
             Semester created = firestoreService.createSemester(semester);
             return ResponseEntity.ok(created);
         } catch (Exception e) {

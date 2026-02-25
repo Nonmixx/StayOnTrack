@@ -1,15 +1,15 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
+import 'package:flutter_stayontrack/user_session.dart';
+import '../utils/calendar_utils.dart';
 
 /// Backend URL. 10.0.2.2 = Android emulator; localhost = web/desktop.
 String get baseUrl => kIsWeb ? 'http://localhost:9091' : 'http://10.0.2.2:9091';
 
 ///Planner Engine API client.
 class PlannerApi {
-  static String _userId = 'default-user';
-
-  static void setUserId(String userId) => _userId = userId;
+  static String get _userId => UserSession.uid ?? 'default-user';
 
   /// Get today's tasks for Home page.
   static Future<List<PlannerTask>> getTodaysTasks() async {
@@ -125,15 +125,17 @@ class PlannerApi {
     required String course,
     required DateTime? dueDate,
     String type = 'assignment',
+    String? difficulty,
+    bool? isIndividual,
   }) async {
     try {
       final body = jsonEncode({
         'title': title,
         'course': course,
-        'dueDate': dueDate != null
-            ? '${dueDate.year}-${dueDate.month.toString().padLeft(2, '0')}-${dueDate.day.toString().padLeft(2, '0')}'
-            : null,
+        'dueDate': dueDate != null ? CalendarUtils.toIso(dueDate) : null,
         'type': type,
+        if (difficulty != null) 'difficulty': difficulty,
+        if (isIndividual != null) 'isIndividual': isIndividual,
       });
       final res = await http.post(
         Uri.parse('$baseUrl/api/deadlines?userId=$_userId'),
@@ -154,15 +156,17 @@ class PlannerApi {
     required String course,
     required DateTime? dueDate,
     String type = 'assignment',
+    String? difficulty,
+    bool? isIndividual,
   }) async {
     try {
       final body = jsonEncode({
         'title': title,
         'course': course,
-        'dueDate': dueDate != null
-            ? '${dueDate.year}-${dueDate.month.toString().padLeft(2, '0')}-${dueDate.day.toString().padLeft(2, '0')}'
-            : null,
+        'dueDate': dueDate != null ? CalendarUtils.toIso(dueDate) : null,
         'type': type,
+        if (difficulty != null) 'difficulty': difficulty,
+        if (isIndividual != null) 'isIndividual': isIndividual,
       });
       final res = await http.put(
         Uri.parse('$baseUrl/api/deadlines/$id?userId=$_userId'),
@@ -195,8 +199,18 @@ class Deadline {
   final String course;
   final String? dueDate;
   final String? type;
+  final String? difficulty;
+  final bool? isIndividual;
 
-  Deadline({required this.id, required this.title, required this.course, this.dueDate, this.type});
+  Deadline({
+    required this.id,
+    required this.title,
+    required this.course,
+    this.dueDate,
+    this.type,
+    this.difficulty,
+    this.isIndividual,
+  });
 
   factory Deadline.fromJson(Map<String, dynamic> json) {
     String? dueDateStr;
@@ -209,6 +223,8 @@ class Deadline {
       course: json['course'] as String? ?? '',
       dueDate: dueDateStr,
       type: json['type'] as String?,
+      difficulty: json['difficulty'] as String?,
+      isIndividual: json['isIndividual'] as bool?,
     );
   }
 }
@@ -222,6 +238,7 @@ class PlannerTask {
   final String? dueDate;
   final DateTime? scheduledStartTime;
   final String? difficulty;
+  final bool? isIndividual; // true = individual, false = group
   final String? status;
 
   PlannerTask({
@@ -233,6 +250,7 @@ class PlannerTask {
     this.dueDate,
     this.scheduledStartTime,
     this.difficulty,
+    this.isIndividual,
     this.status,
   });
 
@@ -264,6 +282,7 @@ class PlannerTask {
       dueDate: dueDateStr,
       scheduledStartTime: scheduledStart,
       difficulty: json['difficulty'] as String?,
+      isIndividual: json['isIndividual'] as bool?,
       status: json['status'] as String?,
     );
   }

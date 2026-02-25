@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_stayontrack/welcome_1.dart';
 import 'app_nav.dart';
 import 'home_page.dart';
 import 'planner_page.dart';
@@ -10,7 +11,7 @@ import 'assignment_setup.dart';
 import 'ai_task_breakdown.dart';
 import 'ai_task_distribution.dart';
 import 'edit_setup.dart';
-import 'settings_page.dart';
+import 'profile_setting.dart';
 import 'semester_setup_page.dart';
 import 'course_and_exam_input.dart';
 import 'assignment_and_project_page.dart';
@@ -20,6 +21,7 @@ import 'edit_deadlines_page.dart';
 import 'routes.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
 
@@ -36,19 +38,19 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
         fontFamily: 'Roboto',
       ),
-      home: const SemesterSetupPage(),
+      home: const WelcomePage1(),
       routes: {
         AppRoutes.semesterSetup: (context) => const SemesterSetupPage(),
         AppRoutes.courseAndExamInput: (context) =>
-            const CourseAndExamInputPage(),
+        const CourseAndExamInputPage(),
         AppRoutes.assignmentAndProject: (context) =>
-            const AssignmentAndProjectPage(),
+        const AssignmentAndProjectPage(),
         AppRoutes.focusAndEnergyProfile: (context) =>
-            const FocusAndEnergyProfilePage(),
+        const FocusAndEnergyProfilePage(),
         AppRoutes.addDeadline: (context) {
           final a =
-              ModalRoute.of(context)?.settings.arguments
-                  as Map<String, dynamic>?;
+          ModalRoute.of(context)?.settings.arguments
+          as Map<String, dynamic>?;
           if (a == null) return const AddDeadlinePage();
           return AddDeadlinePage(
             editIndex: a['editIndex'] as int?,
@@ -58,6 +60,7 @@ class MyApp extends StatelessWidget {
             initialDueDate: a['dueDate'] as DateTime?,
             initialDifficulty: a['difficulty'] as String?,
             initialIsIndividual: a['isIndividual'] as bool?,
+            initialType: a['editType'] as String?,
           );
         },
         AppRoutes.editDeadlines: (context) => const EditDeadlinesPage(),
@@ -82,6 +85,8 @@ class MainNavigation extends StatefulWidget {
 
 class _MainNavigationState extends State<MainNavigation> {
   int _selectedIndex = 0;
+  int _plannerRefreshTrigger = 0;
+  int _homeRefreshTrigger = 0;
 
   static const int _settingsIndex = 3;
 
@@ -98,11 +103,23 @@ class _MainNavigationState extends State<MainNavigation> {
     AppNav.navigateToGroup = () => setState(() => _selectedIndex = _groupIndex);
     AppNav.navigateToSettings = () =>
         setState(() => _selectedIndex = _settingsIndex);
+    AppNav.onReturnFromSetup = () {
+      setState(() {
+        _homeRefreshTrigger++;
+        _plannerRefreshTrigger++;
+      });
+    };
+    AppNav.onPlanRegenerated = () {
+      setState(() {
+        _homeRefreshTrigger++;
+        _plannerRefreshTrigger++;
+      });
+    };
   }
 
-  final List<Widget> _pages = [
-    const HomePage(),
-    const PlannerPage(),
+  List<Widget> get _pages => [
+    HomePage(refreshTrigger: _homeRefreshTrigger),
+    PlannerPage(refreshTrigger: _plannerRefreshTrigger),
     const GroupPage(),
     const SettingsPage(),
   ];
@@ -123,6 +140,8 @@ class _MainNavigationState extends State<MainNavigation> {
         onTap: (index) {
           setState(() {
             _selectedIndex = index;
+            if (index == _plannerIndex) _plannerRefreshTrigger++;
+            if (index == _homeIndex) _homeRefreshTrigger++;
           });
         },
         items: const [
@@ -144,31 +163,6 @@ class _MainNavigationState extends State<MainNavigation> {
           ),
         ],
       ),
-    );
-  }
-}
-
-class SettingsPage extends StatelessWidget {
-  const SettingsPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey[50],
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
-        title: const Text(
-          'Settings',
-          style: TextStyle(
-            color: Colors.black87,
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-      body: const Center(child: Text('Settings Page')),
     );
   }
 }

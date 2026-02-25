@@ -45,38 +45,50 @@ public class GeminiService {
 
         try {
             StringBuilder prompt = new StringBuilder();
-            prompt.append("You are a study planner AI. Create a WEEKLY STUDY SCHEDULE with SPECIFIC TIME SLOTS for each task. ");
+            prompt.append("You are a study planner AI. Create a WEEKLY STUDY SCHEDULE with SPECIFIC TIME SLOTS. ");
+            if (peakFocusTimes != null && !peakFocusTimes.isEmpty()) {
+                prompt.append("RULE #1 - PEAK FOCUS: You MUST schedule ALL sessions ONLY during these windows: ").append(String.join(", ", peakFocusTimes)).append(". ");
+            }
+            if (lowEnergyTimes != null && !lowEnergyTimes.isEmpty()) {
+                prompt.append("RULE #2 - LOW ENERGY: You MUST NEVER schedule during: ").append(String.join(", ", lowEnergyTimes)).append(". ");
+            }
+            if (restDays != null && !restDays.isEmpty()) {
+                prompt.append("RULE #3 - REST DAYS: You MUST NOT schedule on: ").append(String.join(", ", restDays)).append(". ");
+            }
             prompt.append("Each task MUST have a concrete time (e.g. Monday 3:00 PM, Tuesday 8:00 PM). ");
-            prompt.append("Spread tasks across the week. You may schedule 2-3 sessions per day when appropriate (e.g. morning 9am, afternoon 2pm, evening 7pm). ");
+            prompt.append("CRITICAL - SPREAD ACROSS DAYS: This is a WEEKLY study plan. Use as many AVAILABLE days as possible. ");
+            if (restDays != null && !restDays.isEmpty()) {
+                prompt.append("You may NOT schedule on rest days: ").append(String.join(", ", restDays)).append(". ");
+                prompt.append("So use ALL other weekdays. Example: if rest days are Sat+Sun, use Mon Tue Wed Thu Fri - spread tasks across these 5 days. ");
+            }
+            prompt.append("If exam is Saturday, user has Mon-Fri to revise - use multiple days (e.g. Tue, Wed, Thu, Fri). Put at most 2-3 sessions per day. ");
+            prompt.append("CRITICAL: Sessions must NEVER overlap - each session needs a unique time slot. Stagger sessions (e.g. 9am, 11:30am, 2pm, 7pm) so no two sessions on the same day overlap. ");
+            prompt.append("When a deadline is within 1 week, schedule 2+ sessions per day for that item to allow adequate preparation, but still respect rest and focus preferences. ");
             if (weekStart != null) {
                 prompt.append("Generate ONLY for this week starting ").append(weekStart.format(DateTimeFormatter.ISO_LOCAL_DATE)).append(". ");
+                prompt.append("Today is ").append(LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)).append(" - do NOT schedule any task for dates before today. ");
             }
             prompt.append("Total study hours to schedule this week: ").append(availableHours).append(". ");
             if (typicalStudyDuration != null && !typicalStudyDuration.isBlank()) {
-                prompt.append("Preferred session length: ").append(typicalStudyDuration).append(". ");
-            }
-            if (peakFocusTimes != null && !peakFocusTimes.isEmpty()) {
-                prompt.append("PREFER scheduling during: ").append(String.join(", ", peakFocusTimes)).append(". ");
-            }
-            if (lowEnergyTimes != null && !lowEnergyTimes.isEmpty()) {
-                prompt.append("AVOID scheduling during: ").append(String.join(", ", lowEnergyTimes)).append(". ");
-            }
-            if (restDays != null && !restDays.isEmpty()) {
-                prompt.append("DO NOT schedule on: ").append(String.join(", ", restDays)).append(". ");
+                prompt.append("RULE #4 - TYPICAL SESSION: User's typical study session is ").append(typicalStudyDuration).append(". ");
+                prompt.append("Keep each session at most this length. INSERT 15-30 minute breaks between consecutive sessions - do NOT schedule back-to-back. ");
+                prompt.append("Example: 9am-10am, 10:30am-11:30am, 2pm-3pm - never 9am-10am, 10am-11am. ");
             }
             if (feedback != null && !feedback.isBlank()) {
                 prompt.append("User feedback: ").append(feedback).append(". ");
             }
             if (!deadlines.isEmpty()) {
-                prompt.append("Create study tasks ONLY for these items (they are all due on or after the week start - do NOT include any past deadlines): ");
+                prompt.append("CRITICAL - Create study tasks for ALL of these items. You MUST include at least one task for EACH item. Do not skip any: ");
                 for (Deadline d : deadlines) {
                     String due = d.getDueDate() != null ? d.getDueDate().format(DateTimeFormatter.ISO_LOCAL_DATE) : "?";
                     prompt.append(d.getCourse()).append(" ").append(d.getTitle()).append(" (").append(d.getType()).append(") due ").append(due).append("; ");
                 }
-                prompt.append("Prioritize items due soonest. Never schedule tasks for deadlines that have already passed. ");
+                prompt.append("Exams (type=exam) MUST have preparation tasks - include at least one 'Prepare for' task per exam. ");
+                prompt.append("Assignments MUST have tasks - include at least one 'Work on' task per assignment. ");
+                prompt.append("Prioritize items due soonest. Never schedule tasks for deadlines that have already passed. Never schedule any task for a date before today. ");
             }
             prompt.append("Return ONLY a JSON array. Each object: day (1=Mon..7=Sun), startTime (HH:mm 24h), duration (e.g. \"2 hours\"), title, course. ");
-            prompt.append("Spread across days. Example: [{\"day\":1,\"startTime\":\"15:00\",\"duration\":\"2 hours\",\"title\":\"Review Chapter 5\",\"course\":\"CS1234\"},{\"day\":1,\"startTime\":\"19:00\",\"duration\":\"1 hour\",\"title\":\"Practice problems\",\"course\":\"CS1234\"}]");
+            prompt.append("Use DIFFERENT days. Example: [{\"day\":1,\"startTime\":\"15:00\",\"duration\":\"2 hours\",\"title\":\"Review Chapter 5\",\"course\":\"CS1234\"},{\"day\":3,\"startTime\":\"17:00\",\"duration\":\"1 hour\",\"title\":\"Practice problems\",\"course\":\"CS1234\"},{\"day\":5,\"startTime\":\"10:00\",\"duration\":\"1 hour\",\"title\":\"Quiz prep\",\"course\":\"MATH101\"}]");
 
             String response = callGemini(prompt.toString());
             return parseTimeSlottedSuggestions(response);

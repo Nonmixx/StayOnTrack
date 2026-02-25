@@ -18,6 +18,7 @@ public class PlannerTask {
     private LocalDate dueDate;
     private LocalDateTime scheduledStartTime;
     private String difficulty;
+    private Boolean isIndividual; // true = individual, false = group
     private String status;
     private LocalDateTime createdAt;
 
@@ -30,6 +31,11 @@ public class PlannerTask {
 
     public PlannerTask(String plannerWeekId, String userId, String title, String course,
                        String duration, LocalDate dueDate, LocalDateTime scheduledStartTime, String difficulty) {
+        this(plannerWeekId, userId, title, course, duration, dueDate, scheduledStartTime, difficulty, null);
+    }
+
+    public PlannerTask(String plannerWeekId, String userId, String title, String course,
+                       String duration, LocalDate dueDate, LocalDateTime scheduledStartTime, String difficulty, Boolean isIndividual) {
         this.plannerWeekId = plannerWeekId;
         this.userId = userId;
         this.title = title;
@@ -37,7 +43,8 @@ public class PlannerTask {
         this.duration = duration;
         this.dueDate = dueDate;
         this.scheduledStartTime = scheduledStartTime;
-        this.difficulty = difficulty != null ? difficulty : "MEDIUM";
+        this.difficulty = difficulty;  // null for exams; only set for assignments when user chose
+        this.isIndividual = isIndividual;
         this.status = "ON_TRACK";
         this.completed = false;
         this.createdAt = LocalDateTime.now();
@@ -72,6 +79,9 @@ public class PlannerTask {
 
     public String getDifficulty() { return difficulty; }
     public void setDifficulty(String difficulty) { this.difficulty = difficulty; }
+
+    public Boolean getIsIndividual() { return isIndividual; }
+    public void setIsIndividual(Boolean isIndividual) { this.isIndividual = isIndividual; }
 
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }

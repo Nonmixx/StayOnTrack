@@ -140,6 +140,8 @@ public class FirestoreService {
         if (deadline.getTitle() != null) updates.put("title", deadline.getTitle());
         if (deadline.getCourse() != null) updates.put("course", deadline.getCourse());
         if (deadline.getType() != null) updates.put("type", deadline.getType());
+        if (deadline.getDifficulty() != null) updates.put("difficulty", deadline.getDifficulty());
+        if (deadline.getIsIndividual() != null) updates.put("isIndividual", deadline.getIsIndividual());
         if (deadline.getDueDate() != null) {
             updates.put("dueDate", Timestamp.of(java.sql.Timestamp.from(
                     deadline.getDueDate().atStartOfDay(ZoneId.systemDefault()).toInstant())));
@@ -433,6 +435,12 @@ public class FirestoreService {
     // ==================== FOCUS PROFILES ====================
 
     public FocusProfile createFocusProfile(FocusProfile profile) throws ExecutionException, InterruptedException {
+        if (profile.getUserId() == null || profile.getUserId().isEmpty()) {
+            throw new IllegalArgumentException("FocusProfile userId is required for Firestore");
+        }
+        if (profile.getCreatedAt() == null) {
+            profile.setCreatedAt(LocalDateTime.now());
+        }
         Firestore db = getFirestore();
         Map<String, Object> data = focusProfileToMap(profile);
         DocumentReference docRef = db.collection(FOCUS_PROFILES_COLLECTION).add(data).get();
@@ -463,6 +471,9 @@ public class FirestoreService {
         if (profile.getPeakFocusTimes() != null) updates.put("peakFocusTimes", profile.getPeakFocusTimes());
         if (profile.getLowEnergyTimes() != null) updates.put("lowEnergyTimes", profile.getLowEnergyTimes());
         if (profile.getTypicalStudyDuration() != null) updates.put("typicalStudyDuration", profile.getTypicalStudyDuration());
+        if (updates.isEmpty()) {
+            return profile;
+        }
         docRef.update(updates).get();
         profile.setId(profileId);
         return profile;
@@ -518,6 +529,8 @@ public class FirestoreService {
         map.put("course", d.getCourse());
         map.put("type", d.getType());
         map.put("userId", d.getUserId());
+        if (d.getDifficulty() != null) map.put("difficulty", d.getDifficulty());
+        if (d.getIsIndividual() != null) map.put("isIndividual", d.getIsIndividual());
         if (d.getDueDate() != null) {
             map.put("dueDate", Timestamp.of(java.sql.Timestamp.from(
                     d.getDueDate().atStartOfDay(ZoneId.systemDefault()).toInstant())));
@@ -537,6 +550,9 @@ public class FirestoreService {
         d.setCourse(doc.getString("course"));
         d.setType(doc.getString("type"));
         d.setUserId(doc.getString("userId"));
+        d.setDifficulty(doc.getString("difficulty"));
+        Boolean ind = doc.getBoolean("isIndividual");
+        d.setIsIndividual(ind != null ? ind : Boolean.TRUE);
         Timestamp ts = doc.getTimestamp("dueDate");
         if (ts != null) {
             d.setDueDate(LocalDateTime.ofInstant(ts.toDate().toInstant(), ZoneId.systemDefault()).toLocalDate());
@@ -625,6 +641,7 @@ public class FirestoreService {
         map.put("duration", t.getDuration());
         map.put("completed", t.isCompleted());
         map.put("difficulty", t.getDifficulty());
+        if (t.getIsIndividual() != null) map.put("isIndividual", t.getIsIndividual());
         map.put("status", t.getStatus());
         if (t.getDueDate() != null) {
             map.put("dueDate", Timestamp.of(java.sql.Timestamp.from(
@@ -652,6 +669,8 @@ public class FirestoreService {
         t.setDuration(doc.getString("duration"));
         t.setCompleted(Boolean.TRUE.equals(doc.getBoolean("completed")));
         t.setDifficulty(doc.getString("difficulty"));
+        Boolean ind = doc.getBoolean("isIndividual");
+        t.setIsIndividual(ind);  // null for exams (no Individual/Group); only set when stored
         t.setStatus(doc.getString("status"));
         Timestamp ts = doc.getTimestamp("dueDate");
         if (ts != null) {
