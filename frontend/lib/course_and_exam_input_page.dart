@@ -58,7 +58,8 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
   }
 
   void _applyEditArgs() {
-    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    final args =
+        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
     final editId = args?['editDeadlineId'] as String?;
     if (editId == null || editId.isEmpty) return;
     final idx = _exams.indexWhere((e) => e.id == editId);
@@ -67,8 +68,12 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
     setState(() {
       _editingIndex = idx;
       _courseNameController.text = e.courseName;
-      _selectedExamType = _examTypes.contains(e.examType) ? e.examType : 'Other';
-      _otherTypeController.text = _examTypes.contains(e.examType) ? '' : e.examType;
+      _selectedExamType = _examTypes.contains(e.examType)
+          ? e.examType
+          : 'Other';
+      _otherTypeController.text = _examTypes.contains(e.examType)
+          ? ''
+          : e.examType;
       _examDate = e.date;
       _weightValue = e.weight ?? 0;
       _weightController.text = '${_weightValue}';
@@ -131,8 +136,18 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
   }
 
   static const _monthNames = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
   String _formatDateLong(DateTime? date) {
     if (date == null) return '';
@@ -185,20 +200,25 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
         course: course,
         dueDate: entry.date,
         type: 'exam',
-        difficulty: entry.weight != null && entry.weight! > 0 ? '${entry.weight}%' : null,
+        difficulty: entry.weight != null && entry.weight! > 0
+            ? '${entry.weight}%'
+            : null,
       );
       if (updated != null) {
         final idx = deadlineStore.items.indexWhere((i) => i.id == entry.id);
         if (idx >= 0) {
-          deadlineStore.updateAt(idx, DeadlineItem(
-            id: updated.id,
-            title: '$course - ${entry.examType}',
-            courseName: course,
-            dueDate: entry.date,
-            difficulty: entry.weight != null ? '${entry.weight}%' : '—',
-            isIndividual: true,
-            type: 'exam',
-          ));
+          deadlineStore.updateAt(
+            idx,
+            DeadlineItem(
+              id: updated.id,
+              title: '$course - ${entry.examType}',
+              courseName: course,
+              dueDate: entry.date,
+              difficulty: entry.weight != null ? '${entry.weight}%' : '—',
+              isIndividual: true,
+              type: 'exam',
+            ),
+          );
         }
         await PlannerApi.generatePlan(availableHours: 20);
         AppNav.onPlanRegenerated?.call();
@@ -217,35 +237,48 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
         course: course,
         dueDate: entry.date,
         type: 'exam',
-        difficulty: entry.weight != null && entry.weight! > 0 ? '${entry.weight}%' : null,
+        difficulty: entry.weight != null && entry.weight! > 0
+            ? '${entry.weight}%'
+            : null,
       );
       if (created != null) {
-        deadlineStore.add(DeadlineItem(
-          id: created.id,
-          title: '$course - ${entry.examType}',
-          courseName: course,
-          dueDate: entry.date,
-          difficulty: entry.weight != null ? '${entry.weight}%' : '—',
-          isIndividual: true,
-        ));
+        deadlineStore.add(
+          DeadlineItem(
+            id: created.id,
+            title: '$course - ${entry.examType}',
+            courseName: course,
+            dueDate: entry.date,
+            difficulty: entry.weight != null ? '${entry.weight}%' : '—',
+            isIndividual: true,
+          ),
+        );
         // Brief delay when in setup flow so Firestore has the deadline before generatePlan fetches it
-        final fromSetup = ModalRoute.of(context)?.settings.arguments?['fromHomeAdd'] != true;
+        final routeArgs =
+            ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+        final fromSetup = routeArgs?['fromHomeAdd'] != true;
         if (fromSetup) await Future.delayed(const Duration(milliseconds: 500));
         final plan = await PlannerApi.generatePlan(availableHours: 20);
         AppNav.onPlanRegenerated?.call();
         if (plan == null && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Plan saved but generation failed. Try opening Planner tab to retry.'), backgroundColor: Colors.orange),
+            const SnackBar(
+              content: Text(
+                'Plan saved but generation failed. Try opening Planner tab to retry.',
+              ),
+              backgroundColor: Colors.orange,
+            ),
           );
         }
         setState(() {
-          _exams.add(_ExamEntry(
-            id: created.id,
-            courseName: entry.courseName,
-            examType: entry.examType,
-            date: entry.date,
-            weight: entry.weight,
-          ));
+          _exams.add(
+            _ExamEntry(
+              id: created.id,
+              courseName: entry.courseName,
+              examType: entry.examType,
+              date: entry.date,
+              weight: entry.weight,
+            ),
+          );
           _clearForm();
         });
         return;
@@ -277,7 +310,9 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
     _courseNameController.text = e.courseName;
     _weightController.text = '${e.weight ?? 0}';
     _weightValue = e.weight ?? 0;
-    _otherTypeController.text = _examTypes.contains(e.examType) ? '' : e.examType;
+    _otherTypeController.text = _examTypes.contains(e.examType)
+        ? ''
+        : e.examType;
     _selectedExamType = _examTypes.contains(e.examType) ? e.examType : 'Other';
     _examDate = e.date;
     setState(() => _editingIndex = index);
@@ -310,9 +345,7 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
         leading: IconButton(
           icon: const Icon(Icons.chevron_left),
           onPressed: () => Navigator.of(context).pop(),
-          style: IconButton.styleFrom(
-            foregroundColor: _darkPurple,
-          ),
+          style: IconButton.styleFrom(foregroundColor: _darkPurple),
         ),
         title: const Text(
           'Back',
@@ -358,7 +391,9 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
                           children: [
                             TextField(
                               controller: _courseNameController,
-                              decoration: _inputDecoration(hint: 'Enter Course'),
+                              decoration: _inputDecoration(
+                                hint: 'Enter Course',
+                              ),
                             ),
                             const SizedBox(height: 6),
                             hintText('e.g. CS101'),
@@ -376,15 +411,23 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
                               decoration: _inputDecoration(),
                               borderRadius: BorderRadius.circular(8),
                               items: _examTypes
-                                  .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                                  .map(
+                                    (e) => DropdownMenuItem(
+                                      value: e,
+                                      child: Text(e),
+                                    ),
+                                  )
                                   .toList(),
-                              onChanged: (v) => setState(() => _selectedExamType = v),
+                              onChanged: (v) =>
+                                  setState(() => _selectedExamType = v),
                             ),
                             if (_selectedExamType == 'Other') ...[
                               const SizedBox(height: 12),
                               TextField(
                                 controller: _otherTypeController,
-                                decoration: _inputDecoration(hint: 'Enter exam type'),
+                                decoration: _inputDecoration(
+                                  hint: 'Enter exam type',
+                                ),
                               ),
                             ],
                           ],
@@ -404,19 +447,32 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
                               fillColor: Colors.grey.shade50,
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
-                                borderSide: BorderSide(color: Colors.grey.shade300),
+                                borderSide: BorderSide(
+                                  color: Colors.grey.shade300,
+                                ),
                               ),
                               enabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
-                                borderSide: BorderSide(color: Colors.grey.shade300),
+                                borderSide: BorderSide(
+                                  color: Colors.grey.shade300,
+                                ),
                               ),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                              suffixIcon: const Icon(Icons.calendar_today, color: _hintGray, size: 20),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 14,
+                              ),
+                              suffixIcon: const Icon(
+                                Icons.calendar_today,
+                                color: _hintGray,
+                                size: 20,
+                              ),
                             ),
                             child: Text(
                               _formatDate(_examDate),
                               style: TextStyle(
-                                color: _examDate == null ? _hintGray : Colors.black87,
+                                color: _examDate == null
+                                    ? _hintGray
+                                    : Colors.black87,
                                 fontSize: 16,
                               ),
                             ),
@@ -438,7 +494,9 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
                                     setState(() => _weightValue = v);
                                   }
                                 },
-                                decoration: _inputDecoration(hint: 'Enter Exam Weight'),
+                                decoration: _inputDecoration(
+                                  hint: 'Enter Exam Weight',
+                                ),
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -450,7 +508,8 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
                                     if (_weightValue < 100) {
                                       setState(() {
                                         _weightValue++;
-                                        _weightController.text = '$_weightValue';
+                                        _weightController.text =
+                                            '$_weightValue';
                                       });
                                     }
                                   },
@@ -465,7 +524,8 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
                                     if (_weightValue > 0) {
                                       setState(() {
                                         _weightValue--;
-                                        _weightController.text = '$_weightValue';
+                                        _weightController.text =
+                                            '$_weightValue';
                                       });
                                     }
                                   },
@@ -487,8 +547,15 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
                           height: 48,
                           child: ElevatedButton.icon(
                             onPressed: _addExam,
-                            icon: Icon(_editingIndex != null ? Icons.check : Icons.add, size: 20),
-                            label: Text(_editingIndex != null ? 'Update Exam' : 'Add Exam'),
+                            icon: Icon(
+                              _editingIndex != null ? Icons.check : Icons.add,
+                              size: 20,
+                            ),
+                            label: Text(
+                              _editingIndex != null
+                                  ? 'Update Exam'
+                                  : 'Add Exam',
+                            ),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: _lightPurple,
                               foregroundColor: Colors.white,
@@ -514,10 +581,7 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
                           child: Center(
                             child: Text(
                               'No exams added yet. Add your first exam to get started.',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: _hintGray,
-                              ),
+                              style: TextStyle(fontSize: 14, color: _hintGray),
                               textAlign: TextAlign.center,
                             ),
                           ),
@@ -526,7 +590,8 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
                           itemCount: _exams.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 12),
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 12),
                           itemBuilder: (context, i) => _ScheduledExamCard(
                             entry: _exams[i],
                             formatDateLong: _formatDateLong,
@@ -562,7 +627,9 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
                       child: SizedBox(
                         height: 52,
                         child: ElevatedButton(
-                          onPressed: _exams.isNotEmpty ? () => _goToAssignments(context) : null,
+                          onPressed: _exams.isNotEmpty
+                              ? () => _goToAssignments(context)
+                              : null,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: _nextButtonColor,
                             disabledBackgroundColor: Colors.grey.shade300,
@@ -611,10 +678,7 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
   }
 
   Widget hintText(String text) {
-    return Text(
-      text,
-      style: const TextStyle(fontSize: 12, color: _hintGray),
-    );
+    return Text(text, style: const TextStyle(fontSize: 12, color: _hintGray));
   }
 }
 
@@ -648,7 +712,9 @@ class _ScheduledExamCard extends StatelessWidget {
   final VoidCallback onDelete;
 
   static const _darkPurple = Color(0xFF4A5568);
-  static const _detailPurple = Color(0xFF7E93CC); // Light purplish-blue for type & weight
+  static const _detailPurple = Color(
+    0xFF7E93CC,
+  ); // Light purplish-blue for type & weight
 
   @override
   Widget build(BuildContext context) {
@@ -713,7 +779,11 @@ class _ScheduledExamCard extends StatelessWidget {
             children: [
               IconButton(
                 onPressed: onEdit,
-                icon: Icon(Icons.edit_outlined, size: 20, color: Colors.grey.shade700),
+                icon: Icon(
+                  Icons.edit_outlined,
+                  size: 20,
+                  color: Colors.grey.shade700,
+                ),
                 style: IconButton.styleFrom(
                   minimumSize: const Size(40, 40),
                   padding: EdgeInsets.zero,
@@ -721,7 +791,11 @@ class _ScheduledExamCard extends StatelessWidget {
               ),
               IconButton(
                 onPressed: onDelete,
-                icon: Icon(Icons.delete_outline, size: 20, color: Colors.grey.shade700),
+                icon: Icon(
+                  Icons.delete_outline,
+                  size: 20,
+                  color: Colors.grey.shade700,
+                ),
                 style: IconButton.styleFrom(
                   minimumSize: const Size(40, 40),
                   padding: EdgeInsets.zero,
@@ -740,10 +814,7 @@ class _ScheduledExamCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '\u2022 ',
-            style: TextStyle(fontSize: 14, color: color),
-          ),
+          Text('\u2022 ', style: TextStyle(fontSize: 14, color: color)),
           Expanded(
             child: Text(
               text,

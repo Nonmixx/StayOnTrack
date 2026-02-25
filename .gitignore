@@ -12,3 +12,5 @@
 # Keep examples/templates trackable
 !**/*.example
 !**/*.sample
+
+.vscode/settings.json
