@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'api/group_api.dart';
 
 /// Page 6.3 - AI Task Breakdown
-// ── CHANGED: StatefulWidget to support dynamic loading ──
 class TaskBreakdownPage extends StatefulWidget {
   const TaskBreakdownPage({Key? key}) : super(key: key);
 
@@ -13,9 +12,9 @@ class TaskBreakdownPage extends StatefulWidget {
 class _TaskBreakdownPageState extends State<TaskBreakdownPage> {
   List<GroupTask> _tasks = [];
   bool _isLoading = true;
+  bool _isRegenerating = false;
   String _assignmentId = '';
 
-  // ── CHANGED: effort colour helpers (replaces hardcoded map values) ──
   Color _effortColor(String effort) {
     switch (effort) {
       case 'Low':
@@ -23,7 +22,7 @@ class _TaskBreakdownPageState extends State<TaskBreakdownPage> {
       case 'High':
         return const Color(0xFFE70030);
       default:
-        return const Color(0xFFD95700); // Medium
+        return const Color(0xFFD95700);
     }
   }
 
@@ -34,14 +33,79 @@ class _TaskBreakdownPageState extends State<TaskBreakdownPage> {
       case 'High':
         return const Color(0xFFFEE2E2);
       default:
-        return const Color(0xFFFFEFDA); // Medium
+        return const Color(0xFFFFEFDA);
     }
+  }
+
+  String _formatDependencies(String? depStr, {int? currentTaskId}) {
+    if (depStr == null || depStr.trim().isEmpty) return 'None';
+
+    final idByTitle = <String, int>{
+      for (final task in _tasks) task.title.trim().toLowerCase(): task.id,
+      for (final task in _tasks) _normalizeDependencyKey(task.title): task.id,
+    };
+    final segments = depStr
+        .split(',')
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .toList();
+
+    if (segments.isEmpty) return 'None';
+
+    final formatted = <String>[];
+    for (final segment in segments) {
+      int? depId = int.tryParse(segment);
+      depId ??= _extractFirstPositiveInt(segment);
+      if (depId != null) {
+        if (currentTaskId == null || depId != currentTaskId) {
+          formatted.add('Task $depId');
+        }
+        continue;
+      }
+
+      final lower = segment.toLowerCase();
+      final normalized = _normalizeDependencyKey(segment);
+      final mappedId = idByTitle[lower] ?? idByTitle[normalized];
+      if (mappedId != null) {
+        if (currentTaskId == null || mappedId != currentTaskId) {
+          formatted.add('Task $mappedId');
+        }
+        continue;
+      }
+
+      if (normalized.isNotEmpty) {
+        for (final entry in idByTitle.entries) {
+          final key = entry.key;
+          if (key.isEmpty) continue;
+          if (normalized.contains(key) || key.contains(normalized)) {
+            if (currentTaskId == null || entry.value != currentTaskId) {
+              formatted.add('Task ${entry.value}');
+            }
+            break;
+          }
+        }
+      }
+    }
+
+    if (formatted.isEmpty) return 'None';
+    return formatted.join(', ');
+  }
+
+  String _normalizeDependencyKey(String value) {
+    return value.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+  }
+
+  int? _extractFirstPositiveInt(String value) {
+    final match = RegExp(r'(\d+)').firstMatch(value);
+    if (match == null) return null;
+    final parsed = int.tryParse(match.group(1)!);
+    if (parsed == null || parsed <= 0) return null;
+    return parsed;
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // ── CHANGED: read assignmentId from route arguments ──
     if (_assignmentId.isEmpty) {
       final args =
           ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
@@ -50,51 +114,112 @@ class _TaskBreakdownPageState extends State<TaskBreakdownPage> {
     }
   }
 
-  // ── CHANGED: load tasks from API instead of hardcoded list ──
+  Future<String> _resolveAssignmentIdIfMissing() async {
+    if (_assignmentId.isNotEmpty) return _assignmentId;
+
+    final assignments = await GroupApi.getGroupAssignments();
+    if (assignments.isEmpty) return '';
+
+    assignments.sort((a, b) {
+      DateTime parseOrMax(String raw) {
+        try {
+          return DateTime.parse(raw);
+        } catch (_) {
+          return DateTime(9999, 12, 31, 23, 59, 59);
+        }
+      }
+
+      return parseOrMax(a.deadline).compareTo(parseOrMax(b.deadline));
+    });
+
+    return assignments.first.id;
+  }
+
   Future<void> _loadTasks() async {
     setState(() => _isLoading = true);
+    _assignmentId = await _resolveAssignmentIdIfMissing();
+    if (_assignmentId.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No assignment found. Please create one first.'),
+            backgroundColor: Color(0xFFE70030),
+          ),
+        );
+      }
+      setState(() {
+        _tasks = [];
+        _isLoading = false;
+      });
+      return;
+    }
+
     final tasks = await GroupApi.getTaskBreakdown(_assignmentId);
+    tasks.sort((a, b) => a.id.compareTo(b.id));
     setState(() {
       _tasks = tasks;
       _isLoading = false;
     });
   }
 
-  // ── CHANGED: regenerate calls API and reloads ──
   Future<void> _regenerateTasks() async {
-    setState(() => _isLoading = true);
-    final tasks = await GroupApi.regenerateTasks(_assignmentId);
-    setState(() {
-      _tasks = tasks;
-      _isLoading = false;
-    });
-  }
+    if (_isRegenerating) return;
+    setState(() => _isRegenerating = true);
+    try {
+      final tasks = await GroupApi.regenerateTasks(_assignmentId);
+      tasks.sort((a, b) => a.id.compareTo(b.id));
+      final error = lastRegenerateTasksError;
 
-  BoxDecoration get _cardDecoration => BoxDecoration(
-    color: const Color(0xFFFFFFFF),
-    borderRadius: BorderRadius.circular(14),
-    boxShadow: [
-      BoxShadow(
-        color: Colors.black.withOpacity(0.1),
-        blurRadius: 3,
-        offset: const Offset(0, 1),
-      ),
-      BoxShadow(
-        color: Colors.black.withOpacity(0.1),
-        blurRadius: 2,
-        offset: const Offset(0, 1),
-      ),
-    ],
-  );
+      if (!mounted) return;
+      if (tasks.isNotEmpty) {
+        setState(() => _tasks = tasks);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Tasks regenerated.'),
+            backgroundColor: Color(0xFF008236),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } else if (error != null && error.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(error),
+            backgroundColor: const Color(0xFFE70030),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Regenerate failed. Please try again.'),
+            backgroundColor: Color(0xFFE70030),
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Regenerate failed: $e'),
+          backgroundColor: const Color(0xFFE70030),
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isRegenerating = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFFFF8F0),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFFFFFFF),
-        elevation: 1,
-        shadowColor: Colors.black.withOpacity(0.1),
+        backgroundColor: Colors.white,
+        elevation: 0,
         leading: IconButton(
           icon: const Icon(
             Icons.arrow_back,
@@ -103,20 +228,24 @@ class _TaskBreakdownPageState extends State<TaskBreakdownPage> {
           ),
           onPressed: () => Navigator.pop(context),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: Color(0xFF2D2D3A), size: 22),
+            onPressed: _isLoading ? null : _loadTasks,
+            tooltip: 'Refresh',
+          ),
+        ],
         centerTitle: true,
         title: const Text(
           'AI Task Breakdown',
           style: TextStyle(
-            fontFamily: 'Arimo',
-            fontSize: 16,
-            height: 1.5,
-            color: Color(0xFF101828),
-            fontWeight: FontWeight.w400,
+            color: Colors.black87,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),
       body: _isLoading
-          // ── CHANGED: loading state ──
           ? const Center(
               child: CircularProgressIndicator(color: Color(0xFFAFBCDD)),
             )
@@ -170,12 +299,21 @@ class _TaskBreakdownPageState extends State<TaskBreakdownPage> {
                   ),
                   const SizedBox(height: 16),
 
-                  // ── CHANGED: empty state when no tasks ──
                   if (_tasks.isEmpty)
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(32),
-                      decoration: _cardDecoration,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFFFFF),
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 3,
+                            offset: const Offset(0, 1),
+                          ),
+                        ],
+                      ),
                       child: const Column(
                         children: [
                           Icon(
@@ -196,7 +334,6 @@ class _TaskBreakdownPageState extends State<TaskBreakdownPage> {
                       ),
                     )
                   else
-                    // ── CHANGED: render from API data ──
                     ..._tasks.map((task) => _buildTaskCard(task)),
 
                   const SizedBox(height: 8),
@@ -221,7 +358,6 @@ class _TaskBreakdownPageState extends State<TaskBreakdownPage> {
                             ],
                           ),
                           child: ElevatedButton(
-                            // ── CHANGED: pass assignmentId forward ──
                             onPressed: () => Navigator.pushNamed(
                               context,
                               '/task-distribution',
@@ -266,31 +402,42 @@ class _TaskBreakdownPageState extends State<TaskBreakdownPage> {
                             ],
                           ),
                           child: ElevatedButton(
-                            // ── CHANGED: calls regenerate API ──
-                            onPressed: _regenerateTasks,
+                            onPressed: _isRegenerating
+                                ? null
+                                : _regenerateTasks,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF9C9EC3),
                               foregroundColor: const Color(0xFFFFFFFF),
+                              disabledBackgroundColor: const Color(0xFFD4D6E8),
+                              disabledForegroundColor: const Color(0xFFFFFFFF),
                               elevation: 0,
                               padding: const EdgeInsets.symmetric(vertical: 14),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8),
                               ),
                             ),
-                            child: const Text(
-                              'Regenerate Tasks',
-                              style: TextStyle(
-                                fontFamily: 'Arimo',
-                                fontSize: 14,
-                                fontWeight: FontWeight.w400,
-                              ),
-                            ),
+                            child: _isRegenerating
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Text(
+                                    'Regenerate Tasks',
+                                    style: TextStyle(
+                                      fontFamily: 'Arimo',
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w400,
+                                    ),
+                                  ),
                           ),
                         ),
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 16),
                 ],
               ),
@@ -329,7 +476,6 @@ class _TaskBreakdownPageState extends State<TaskBreakdownPage> {
     );
   }
 
-  // ── CHANGED: accepts GroupTask model instead of Map ──
   Widget _buildTaskCard(GroupTask task) {
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -384,6 +530,7 @@ class _TaskBreakdownPageState extends State<TaskBreakdownPage> {
                 Expanded(
                   child: Text(
                     task.title,
+                    // ── CHANGED: removed maxLines: 1 and overflow: ellipsis ──
                     style: const TextStyle(
                       fontFamily: 'Arimo',
                       fontSize: 17,
@@ -452,7 +599,10 @@ class _TaskBreakdownPageState extends State<TaskBreakdownPage> {
                       ),
                     ),
                     child: Text(
-                      task.dependencies!,
+                      _formatDependencies(
+                        task.dependencies,
+                        currentTaskId: task.id,
+                      ),
                       style: const TextStyle(
                         fontFamily: 'Arimo',
                         fontSize: 12,

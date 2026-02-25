@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'api/group_api.dart';
 
 /// Page 6.5 - Edit Setup
 class EditSetupPage extends StatefulWidget {
@@ -10,6 +11,9 @@ class EditSetupPage extends StatefulWidget {
 }
 
 class _EditSetupPageState extends State<EditSetupPage> {
+  String _assignmentId = '';
+  bool _isLoadingInitial = true;
+
   final TextEditingController _groupNameController = TextEditingController(
     text: 'MarketMinds',
   );
@@ -23,9 +27,13 @@ class _EditSetupPageState extends State<EditSetupPage> {
   );
 
   DateTime? _selectedDeadline = DateTime(2023, 11, 15, 23, 59);
-  String? _uploadedFileName;
   bool _isAddMemberHovered = false;
-  String _assignmentId = '';
+  bool _isUploading = false;
+  bool _isGenerating = false;
+
+  // ── FIX: list of uploaded files, max 3 ──
+  final List<String> _uploadedFileNames = [];
+  static const int _maxFiles = 3;
 
   List<Map<String, dynamic>> _members = [
     {
@@ -51,25 +59,193 @@ class _EditSetupPageState extends State<EditSetupPage> {
     'Testing',
   ];
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final args =
-        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-    final id = args?['assignmentId'] as String? ?? '';
-    if (id.isNotEmpty && _assignmentId != id) _assignmentId = id;
+  bool get _isFormValid {
+    if (_assignmentId.trim().isEmpty) return false;
+    if (_groupNameController.text.trim().isEmpty) return false;
+    if (_courseNameController.text.trim().isEmpty) return false;
+    if (_assignmentTitleController.text.trim().isEmpty) return false;
+    if (_selectedDeadline == null) return false;
+    final hasNamedMember = _members.any(
+      (m) => (m['name'] as TextEditingController).text.trim().isNotEmpty,
+    );
+    if (!hasNamedMember) return false;
+    if (_briefController.text.trim().isEmpty && _uploadedFileNames.isEmpty) {
+      return false;
+    }
+    return true;
   }
 
+  int _memberNameSortKey(Map<String, dynamic> member) {
+    final controller = member['name'] as TextEditingController;
+    final trimmed = controller.text.trim();
+    if (trimmed.isEmpty) return 123;
+    return trimmed.toUpperCase().codeUnitAt(0);
+  }
+
+  void _sortMembersByInitial() {
+    _members.sort((a, b) {
+      final keyCmp = _memberNameSortKey(a).compareTo(_memberNameSortKey(b));
+      if (keyCmp != 0) return keyCmp;
+      final aName = (a['name'] as TextEditingController).text
+          .trim()
+          .toLowerCase();
+      final bName = (b['name'] as TextEditingController).text
+          .trim()
+          .toLowerCase();
+      return aName.compareTo(bName);
+    });
+  }
+
+  // ── FIX: pick and add file to list ──
   Future<void> _pickFile() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pdf', 'doc', 'docx'],
-    );
-    if (result != null && result.files.isNotEmpty && mounted) {
-      setState(() {
-        _uploadedFileName = result.files.first.name;
-      });
+    if (_uploadedFileNames.length >= _maxFiles) return;
+    setState(() => _isUploading = true);
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'doc', 'docx'],
+        withData: true,
+      );
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.first;
+        if (!_uploadedFileNames.contains(file.name)) {
+          setState(() => _uploadedFileNames.add(file.name));
+        }
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Uploaded: ${file.name}'),
+              backgroundColor: const Color(0xFF008236),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to pick file. Please try again.'),
+            backgroundColor: Color(0xFFE70030),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } finally {
+      setState(() => _isUploading = false);
     }
+  }
+
+  // ── FIX: delete a specific uploaded file ──
+  void _removeFile(int index) {
+    setState(() => _uploadedFileNames.removeAt(index));
+  }
+
+  Future<void> _generateTasks() async {
+    print('='.padRight(80, '='));
+    print('🔄 _generateTasks called');
+    print('📝 _members before filtering: ${_members.length}');
+    for (int i = 0; i < _members.length; i++) {
+      final name = (_members[i]['name'] as TextEditingController).text;
+      final strengths = _members[i]['strengths'] as List<String>;
+      print('  [$i] name="$name", strengths=$strengths');
+    }
+
+    setState(() => _isGenerating = true);
+
+    if (_assignmentId.trim().isEmpty) {
+      setState(() => _isGenerating = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            '❌ Missing assignment ID. Please reopen Edit Setup from Group page.',
+          ),
+          backgroundColor: Color(0xFFE70030),
+        ),
+      );
+      return;
+    }
+
+    final members = _members
+        .where(
+          (m) => (m['name'] as TextEditingController).text.trim().isNotEmpty,
+        )
+        .map(
+          (m) => GroupMember(
+            name: (m['name'] as TextEditingController).text.trim(),
+            strengths: List<String>.from(m['strengths'] as List),
+          ),
+        )
+        .toList();
+
+    print('📝 _members after filtering: ${members.length}');
+
+    // Validation
+    if (members.isEmpty) {
+      setState(() => _isGenerating = false);
+      print('❌ No members with names found!');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('❌ At least one member with a name is required'),
+          backgroundColor: Color(0xFFE70030),
+        ),
+      );
+      return;
+    }
+
+    if (_briefController.text.trim().isEmpty) {
+      setState(() => _isGenerating = false);
+      print('❌ Brief is empty!');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('❌ Assignment brief cannot be empty'),
+          backgroundColor: Color(0xFFE70030),
+        ),
+      );
+      return;
+    }
+
+    print('📤 Calling updateGroupAssignment...');
+    print('  assignmentId: $_assignmentId');
+    print('  members: ${members.length}');
+    print('  brief length: ${_briefController.text.length}');
+
+    final newAssignmentId = await GroupApi.updateGroupAssignment(
+      assignmentId: _assignmentId,
+      groupName: _groupNameController.text.trim(),
+      courseName: _courseNameController.text.trim(),
+      assignmentTitle: _assignmentTitleController.text.trim(),
+      deadline: _selectedDeadline ?? DateTime.now(),
+      members: members,
+      brief: _briefController.text.trim(),
+    );
+
+    if (!mounted) return;
+    setState(() => _isGenerating = false);
+
+    if (newAssignmentId != null) {
+      print('✅ updateGroupAssignment succeeded with ID: $newAssignmentId');
+      Navigator.pushReplacementNamed(
+        context,
+        '/task-breakdown',
+        arguments: {'assignmentId': newAssignmentId},
+      );
+    } else {
+      print('❌ updateGroupAssignment returned null');
+      final error = lastUpdateGroupError;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error == null || error.isEmpty
+                ? '❌ Failed to update and regenerate tasks.'
+                : '❌ $error',
+          ),
+          backgroundColor: Color(0xFFE70030),
+          duration: Duration(seconds: 5),
+        ),
+      );
+    }
+    print('='.padRight(80, '='));
   }
 
   BoxDecoration get _inputBoxDecoration => BoxDecoration(
@@ -131,13 +307,141 @@ class _EditSetupPageState extends State<EditSetupPage> {
   );
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_assignmentId.isEmpty) {
+      final args =
+          ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      _assignmentId = args?['assignmentId'] as String? ?? '';
+      _loadAssignmentData();
+    }
+  }
+
+  Future<String> _resolveAssignmentIdIfMissing() async {
+    if (_assignmentId.isNotEmpty) return _assignmentId;
+
+    final assignments = await GroupApi.getGroupAssignments();
+    if (assignments.isEmpty) return '';
+
+    assignments.sort((a, b) {
+      DateTime parseOrMax(String raw) {
+        try {
+          return DateTime.parse(raw);
+        } catch (_) {
+          return DateTime(9999, 12, 31, 23, 59, 59);
+        }
+      }
+
+      return parseOrMax(a.deadline).compareTo(parseOrMax(b.deadline));
+    });
+
+    return assignments.first.id;
+  }
+
+  DateTime? _parseDeadlineValue(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is DateTime) return raw;
+    if (raw is String) {
+      try {
+        return DateTime.parse(raw);
+      } catch (_) {
+        return null;
+      }
+    }
+    if (raw is Map<String, dynamic>) {
+      final seconds = raw['seconds'];
+      if (seconds is int) {
+        return DateTime.fromMillisecondsSinceEpoch(
+          seconds * 1000,
+          isUtc: true,
+        ).toLocal();
+      }
+      if (seconds is num) {
+        return DateTime.fromMillisecondsSinceEpoch(
+          (seconds * 1000).toInt(),
+          isUtc: true,
+        ).toLocal();
+      }
+    }
+    return null;
+  }
+
+  Future<void> _loadAssignmentData() async {
+    try {
+      _assignmentId = await _resolveAssignmentIdIfMissing();
+      if (_assignmentId.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No assignment found. Please create one first.'),
+              backgroundColor: Color(0xFFE70030),
+            ),
+          );
+          setState(() => _isLoadingInitial = false);
+        }
+        return;
+      }
+
+      final setup = await GroupApi.getAssignmentSetup(_assignmentId);
+      print('✅ getAssignmentSetup returned: ${setup != null}');
+      if (setup != null && mounted) {
+        print('📝 Setup data keys: ${setup.keys}');
+        print('👥 Members from setup: ${setup['members']}');
+
+        setState(() {
+          _groupNameController.text = setup['groupName'] ?? 'Group';
+          _courseNameController.text =
+              setup['courseCode'] ?? setup['courseName'] ?? 'Course';
+          _assignmentTitleController.text =
+              setup['assignmentTitle'] ?? 'Assignment';
+          _briefController.text = setup['brief'] ?? '';
+          _selectedDeadline =
+              _parseDeadlineValue(setup['deadline']) ?? _selectedDeadline;
+
+          // Load members
+          if (setup['members'] != null) {
+            final membersList = setup['members'] as List<dynamic>;
+            print('📝 Loading ${membersList.length} members');
+            _members.clear();
+            for (var m in membersList) {
+              final name = m['name'] as String? ?? '';
+              final strengths =
+                  (m['strengths'] as List<dynamic>?)
+                      ?.map((e) => e.toString())
+                      .toList() ??
+                  <String>[];
+              print('  - Adding member: $name with strengths: $strengths');
+              _members.add({
+                'name': TextEditingController(text: name),
+                'strengths': strengths,
+              });
+            }
+            _sortMembersByInitial();
+          } else {
+            print('❌ setup[members] is null!');
+          }
+
+          _isLoadingInitial = false;
+        });
+        print(
+          '✅ _loadAssignmentData completed. Members count: ${_members.length}',
+        );
+      } else {
+        print('❌ setup is null or not mounted');
+      }
+    } catch (e) {
+      print('❌ _loadAssignmentData error: $e');
+      setState(() => _isLoadingInitial = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFFFF8F0),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFFFFFFF),
-        elevation: 1,
-        shadowColor: Colors.black.withOpacity(0.1),
+        backgroundColor: Colors.white,
+        elevation: 0,
         leading: IconButton(
           icon: const Icon(
             Icons.arrow_back,
@@ -224,7 +528,6 @@ class _EditSetupPageState extends State<EditSetupPage> {
           const SizedBox(height: 10),
           const Divider(color: Color(0xFFE7E6EB), thickness: 1, height: 1),
           const SizedBox(height: 16),
-
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
@@ -275,36 +578,28 @@ class _EditSetupPageState extends State<EditSetupPage> {
             ),
           ),
           const SizedBox(height: 16),
-
           ..._members.asMap().entries.map(
             (entry) => _buildMemberCard(entry.key, entry.value),
           ),
-
           const SizedBox(height: 4),
-
-          // ── CHANGED: dashed border stays, color changes on hover ──
           MouseRegion(
             onEnter: (_) => setState(() => _isAddMemberHovered = true),
             onExit: (_) => setState(() => _isAddMemberHovered = false),
             cursor: SystemMouseCursors.click,
             child: GestureDetector(
-              onTap: () {
-                setState(() {
-                  _members.add({
-                    'name': TextEditingController(),
-                    'strengths': <String>[],
-                  });
+              onTap: () => setState(() {
+                _members.add({
+                  'name': TextEditingController(),
+                  'strengths': <String>[],
                 });
-              },
+                _sortMembersByInitial();
+              }),
               child: CustomPaint(
                 painter: _DashedBorderPainter(
                   color: _isAddMemberHovered
                       ? const Color(0xFFAFBCDD)
                       : const Color(0xFF99A1AF),
                   borderRadius: 10,
-                  dashWidth: 6,
-                  dashSpace: 4,
-                  strokeWidth: _isAddMemberHovered ? 1.8 : 1.5,
                 ),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 150),
@@ -317,29 +612,16 @@ class _EditSetupPageState extends State<EditSetupPage> {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Center(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.add,
-                          size: 16,
-                          color: _isAddMemberHovered
-                              ? const Color(0xFFAFBCDD)
-                              : const Color(0xFF99A1AF),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Add member',
-                          style: TextStyle(
-                            fontFamily: 'Arimo',
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: _isAddMemberHovered
-                                ? const Color(0xFFAFBCDD)
-                                : const Color(0xFF99A1AF),
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      '+ Add member',
+                      style: TextStyle(
+                        fontFamily: 'Arimo',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: _isAddMemberHovered
+                            ? const Color(0xFFAFBCDD)
+                            : const Color(0xFF99A1AF),
+                      ),
                     ),
                   ),
                 ),
@@ -624,6 +906,8 @@ class _EditSetupPageState extends State<EditSetupPage> {
   }
 
   Widget _buildAssignmentBriefSection() {
+    final bool canAddMore = _uploadedFileNames.length < _maxFiles;
+
     return Container(
       decoration: _cardDecoration,
       padding: const EdgeInsets.all(16),
@@ -642,6 +926,8 @@ class _EditSetupPageState extends State<EditSetupPage> {
           const SizedBox(height: 10),
           const Divider(color: Color(0xFFE7E6EB), thickness: 1, height: 1),
           const SizedBox(height: 16),
+
+          // Brief text area
           Container(
             decoration: BoxDecoration(
               color: const Color(0xFFF5F5F5),
@@ -697,6 +983,8 @@ class _EditSetupPageState extends State<EditSetupPage> {
             ),
           ),
           const SizedBox(height: 16),
+
+          // OR divider
           Row(
             children: const [
               Expanded(child: Divider(color: Color(0xFFE7E6EB), thickness: 1)),
@@ -716,50 +1004,156 @@ class _EditSetupPageState extends State<EditSetupPage> {
             ],
           ),
           const SizedBox(height: 16),
+
+          // ── FIX: uploaded files list with individual delete buttons ──
+          if (_uploadedFileNames.isNotEmpty) ...[
+            ..._uploadedFileNames.asMap().entries.map((entry) {
+              final int idx = entry.key;
+              final String name = entry.value;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDBFCE7),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: const Color(0xFF008236).withOpacity(0.2),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.insert_drive_file_outlined,
+                      color: Color(0xFF008236),
+                      size: 18,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        name,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontFamily: 'Arimo',
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF008236),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: () => _removeFile(idx),
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEE2E2),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Icon(
+                          Icons.close,
+                          size: 14,
+                          color: Color(0xFFE70030),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+            const SizedBox(height: 8),
+          ],
+
+          // ── FIX: upload area — disabled when at max ──
           GestureDetector(
-            onTap: _pickFile,
+            onTap: (_isUploading || !canAddMore) ? null : _pickFile,
             child: CustomPaint(
               painter: _DashedBorderPainter(
-                color: const Color(0xFFAFBCDD),
+                color: !canAddMore
+                    ? const Color(0xFFDDDDDD)
+                    : const Color(0xFFAFBCDD),
                 borderRadius: 8,
               ),
               child: Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 28),
+                padding: const EdgeInsets.symmetric(vertical: 22),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF5F5F5),
+                  color: !canAddMore
+                      ? const Color(0xFFF0F0F0)
+                      : const Color(0xFFF5F5F5),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
-                      _uploadedFileName != null
-                          ? Icons.check_circle_outline
-                          : Icons.upload_file_outlined,
-                      color: _uploadedFileName != null
-                          ? const Color(0xFF008236)
-                          : const Color(0xFF909EC3),
-                      size: 32,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _uploadedFileName ?? 'Upload PDF / DOC',
-                      style: TextStyle(
-                        fontFamily: 'Arimo',
-                        color: _uploadedFileName != null
-                            ? const Color(0xFF008236)
+                    if (_isUploading)
+                      const SizedBox(
+                        width: 28,
+                        height: 28,
+                        child: CircularProgressIndicator(
+                          color: Color(0xFFAFBCDD),
+                          strokeWidth: 2,
+                        ),
+                      )
+                    else ...[
+                      Icon(
+                        Icons.upload_file_outlined,
+                        color: !canAddMore
+                            ? const Color(0xFFCCCCCC)
                             : const Color(0xFF909EC3),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
+                        size: 28,
                       ),
-                    ),
+                      const SizedBox(height: 6),
+                      Text(
+                        !canAddMore
+                            ? 'Maximum $_maxFiles files reached'
+                            : 'Upload PDF / DOC',
+                        style: TextStyle(
+                          fontFamily: 'Arimo',
+                          color: !canAddMore
+                              ? const Color(0xFFCCCCCC)
+                              : const Color(0xFF909EC3),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      if (!canAddMore)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 2),
+                          child: Text(
+                            'Remove a file to upload another',
+                            style: TextStyle(
+                              fontFamily: 'Arimo',
+                              color: Color(0xFFCCCCCC),
+                              fontSize: 11,
+                            ),
+                          ),
+                        )
+                      else if (_uploadedFileNames.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            '${_uploadedFileNames.length}/$_maxFiles files — tap to add more',
+                            style: const TextStyle(
+                              fontFamily: 'Arimo',
+                              color: Color(0xFF99A1AF),
+                              fontSize: 11,
+                            ),
+                          ),
+                        ),
+                    ],
                   ],
                 ),
               ),
             ),
           ),
+
           const SizedBox(height: 12),
+
+          // AI note
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -811,28 +1205,35 @@ class _EditSetupPageState extends State<EditSetupPage> {
         ],
       ),
       child: ElevatedButton(
-        onPressed: () => Navigator.pushNamed(
-          context,
-          '/task-distribution',
-          arguments: {'assignmentId': _assignmentId},
-        ),
+        onPressed: (!_isGenerating && _isFormValid) ? _generateTasks : null,
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF9C9EC3),
           foregroundColor: const Color(0xFFFFFFFF),
+          disabledBackgroundColor: const Color(0xFFD4D6E8),
+          disabledForegroundColor: const Color(0xFFFFFFFF).withOpacity(0.5),
           elevation: 0,
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
           ),
         ),
-        child: const Text(
-          'Generate Tasks with AI',
-          style: TextStyle(
-            fontFamily: 'Arimo',
-            fontSize: 16,
-            fontWeight: FontWeight.w400,
-          ),
-        ),
+        child: _isGenerating
+            ? const SizedBox(
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2,
+                ),
+              )
+            : const Text(
+                'Generate Tasks with AI',
+                style: TextStyle(
+                  fontFamily: 'Arimo',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
       ),
     );
   }
@@ -905,11 +1306,13 @@ class _DashedBorderPainter extends CustomPainter {
       ..color = color
       ..strokeWidth = strokeWidth
       ..style = PaintingStyle.stroke;
+
     final RRect rrect = RRect.fromRectAndRadius(
       Rect.fromLTWH(0, 0, size.width, size.height),
       Radius.circular(borderRadius),
     );
     final Path path = Path()..addRRect(rrect);
+
     for (final metric in path.computeMetrics()) {
       double distance = 0.0;
       bool draw = true;
@@ -927,6 +1330,5 @@ class _DashedBorderPainter extends CustomPainter {
   bool shouldRepaint(_DashedBorderPainter oldDelegate) =>
       oldDelegate.color != color ||
       oldDelegate.dashWidth != dashWidth ||
-      oldDelegate.dashSpace != dashSpace ||
-      oldDelegate.strokeWidth != strokeWidth;
+      oldDelegate.dashSpace != dashSpace;
 }

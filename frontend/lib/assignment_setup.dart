@@ -18,11 +18,16 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
   final TextEditingController _briefController = TextEditingController();
 
   DateTime? _selectedDeadline;
-  String? _uploadedFileName;
+  bool _isGenerating = false;
   bool _isAddMemberHovered = false;
-  bool _isCreating = false;
+  bool _isUploading = false;
+
+  // ── FIX: list of uploaded files, max 3 ──
+  final List<String> _uploadedFileNames = [];
+  static const int _maxFiles = 3;
 
   List<Map<String, dynamic>> _members = [
+    {'name': TextEditingController(), 'strengths': <String>[]},
     {'name': TextEditingController(), 'strengths': <String>[]},
   ];
 
@@ -35,6 +40,7 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
     'Testing',
   ];
 
+  // ── FIX: brief text OR uploaded file(s) satisfies brief requirement ──
   bool get _isFormValid {
     if (_groupNameController.text.trim().isEmpty) return false;
     if (_courseNameController.text.trim().isEmpty) return false;
@@ -44,9 +50,8 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
       (m) => (m['name'] as TextEditingController).text.trim().isNotEmpty,
     );
     if (!hasNamedMember) return false;
-    final hasBrief = _briefController.text.trim().isNotEmpty;
-    final hasFile = _uploadedFileName != null;
-    if (!hasBrief && !hasFile) return false;
+    if (_briefController.text.trim().isEmpty && _uploadedFileNames.isEmpty)
+      return false;
     return true;
   }
 
@@ -57,41 +62,81 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
     _courseNameController.addListener(() => setState(() {}));
     _assignmentTitleController.addListener(() => setState(() {}));
     _briefController.addListener(() => setState(() {}));
-    (_members[0]['name'] as TextEditingController).addListener(
-      () => setState(() {}),
-    );
   }
 
-  Future<void> _createAndNavigateToTaskBreakdown() async {
-    if (!_isFormValid || _selectedDeadline == null) return;
-    setState(() => _isCreating = true);
-    final members = _members
-        .map((m) {
-          final name = (m['name'] as TextEditingController).text.trim();
-          if (name.isEmpty) return null;
-          final strengths =
-              (m['strengths'] as List<String>).map((s) => s).toList();
-          return GroupMember(name: name, strengths: strengths);
-        })
-        .whereType<GroupMember>()
-        .toList();
-    if (members.isEmpty) {
-      setState(() => _isCreating = false);
-      return;
+  // ── FIX: pick and add file to list ──
+  Future<void> _pickFile() async {
+    if (_uploadedFileNames.length >= _maxFiles) return;
+    setState(() => _isUploading = true);
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'doc', 'docx'],
+        withData: true,
+      );
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.first;
+        if (!_uploadedFileNames.contains(file.name)) {
+          setState(() => _uploadedFileNames.add(file.name));
+        }
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Uploaded: ${file.name}'),
+              backgroundColor: const Color(0xFF008236),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to pick file. Please try again.'),
+            backgroundColor: Color(0xFFE70030),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } finally {
+      setState(() => _isUploading = false);
     }
+  }
+
+  // ── FIX: delete a specific uploaded file ──
+  void _removeFile(int index) {
+    setState(() => _uploadedFileNames.removeAt(index));
+  }
+
+  Future<void> _generateTasks() async {
+    setState(() => _isGenerating = true);
+
+    final members = _members
+        .where(
+          (m) => (m['name'] as TextEditingController).text.trim().isNotEmpty,
+        )
+        .map(
+          (m) => GroupMember(
+            name: (m['name'] as TextEditingController).text.trim(),
+            strengths: List<String>.from(m['strengths'] as List),
+          ),
+        )
+        .toList();
+
     final assignmentId = await GroupApi.createGroupAssignment(
       groupName: _groupNameController.text.trim(),
       courseName: _courseNameController.text.trim(),
       assignmentTitle: _assignmentTitleController.text.trim(),
       deadline: _selectedDeadline!,
       members: members,
-      brief: _briefController.text.trim().isNotEmpty
-          ? _briefController.text.trim()
-          : 'Assignment brief (see uploaded file).',
+      brief: _briefController.text.trim(),
     );
+
     if (!mounted) return;
-    setState(() => _isCreating = false);
-    if (assignmentId != null && assignmentId.isNotEmpty) {
+    setState(() => _isGenerating = false);
+
+    if (assignmentId != null) {
       Navigator.pushNamed(
         context,
         '/task-breakdown',
@@ -100,7 +145,8 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Failed to create assignment. Please try again.'),
+          content: Text('Failed to generate tasks. Please try again.'),
+          backgroundColor: Color(0xFFE70030),
         ),
       );
     }
@@ -164,26 +210,13 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
     ],
   );
 
-  Future<void> _pickFile() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pdf', 'doc', 'docx'],
-    );
-    if (result != null && result.files.isNotEmpty && mounted) {
-      setState(() {
-        _uploadedFileName = result.files.first.name;
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFFFF8F0),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFFFFFFF),
-        elevation: 1,
-        shadowColor: Colors.black.withOpacity(0.1),
+        backgroundColor: Colors.white,
+        elevation: 0,
         leading: IconButton(
           icon: const Icon(
             Icons.arrow_back,
@@ -196,11 +229,9 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
         title: const Text(
           'New Group Assignment',
           style: TextStyle(
-            fontFamily: 'Arimo',
-            fontSize: 16,
-            height: 1.5,
-            color: Color(0xFF101828),
-            fontWeight: FontWeight.w400,
+            color: Colors.black87,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),
@@ -270,7 +301,6 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
           const SizedBox(height: 10),
           const Divider(color: Color(0xFFE7E6EB), thickness: 1, height: 1),
           const SizedBox(height: 16),
-
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
@@ -321,26 +351,21 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
             ),
           ),
           const SizedBox(height: 16),
-
           ..._members.asMap().entries.map(
             (entry) => _buildMemberCard(entry.key, entry.value),
           ),
-
           const SizedBox(height: 4),
-
-          // ── CHANGED: dashed border + hover (color changes on hover) ──
           MouseRegion(
             onEnter: (_) => setState(() => _isAddMemberHovered = true),
             onExit: (_) => setState(() => _isAddMemberHovered = false),
             cursor: SystemMouseCursors.click,
             child: GestureDetector(
-              onTap: () {
-                final controller = TextEditingController();
-                controller.addListener(() => setState(() {}));
-                setState(() {
-                  _members.add({'name': controller, 'strengths': <String>[]});
+              onTap: () => setState(() {
+                _members.add({
+                  'name': TextEditingController(),
+                  'strengths': <String>[],
                 });
-              },
+              }),
               child: CustomPaint(
                 painter: _DashedBorderPainter(
                   color: _isAddMemberHovered
@@ -349,7 +374,6 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
                   borderRadius: 10,
                   dashWidth: 6,
                   dashSpace: 4,
-                  strokeWidth: _isAddMemberHovered ? 1.8 : 1.5,
                 ),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 150),
@@ -362,29 +386,16 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Center(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.add,
-                          size: 16,
-                          color: _isAddMemberHovered
-                              ? const Color(0xFFAFBCDD)
-                              : const Color(0xFF99A1AF),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Add member',
-                          style: TextStyle(
-                            fontFamily: 'Arimo',
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: _isAddMemberHovered
-                                ? const Color(0xFFAFBCDD)
-                                : const Color(0xFF99A1AF),
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      '+ Add member',
+                      style: TextStyle(
+                        fontFamily: 'Arimo',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: _isAddMemberHovered
+                            ? const Color(0xFFAFBCDD)
+                            : const Color(0xFF99A1AF),
+                      ),
                     ),
                   ),
                 ),
@@ -667,6 +678,8 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
   }
 
   Widget _buildAssignmentBriefSection() {
+    final bool canAddMore = _uploadedFileNames.length < _maxFiles;
+
     return Container(
       decoration: _cardDecoration,
       padding: const EdgeInsets.all(16),
@@ -685,6 +698,8 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
           const SizedBox(height: 10),
           const Divider(color: Color(0xFFE7E6EB), thickness: 1, height: 1),
           const SizedBox(height: 16),
+
+          // Brief text area
           Container(
             decoration: BoxDecoration(
               color: const Color(0xFFF5F5F5),
@@ -740,6 +755,8 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
             ),
           ),
           const SizedBox(height: 16),
+
+          // OR divider
           Row(
             children: const [
               Expanded(child: Divider(color: Color(0xFFE7E6EB), thickness: 1)),
@@ -759,52 +776,159 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
             ],
           ),
           const SizedBox(height: 16),
+
+          // ── FIX: uploaded files list with individual delete buttons ──
+          if (_uploadedFileNames.isNotEmpty) ...[
+            ..._uploadedFileNames.asMap().entries.map((entry) {
+              final int idx = entry.key;
+              final String name = entry.value;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDBFCE7),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: const Color(0xFF008236).withOpacity(0.2),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.insert_drive_file_outlined,
+                      color: Color(0xFF008236),
+                      size: 18,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        name,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontFamily: 'Arimo',
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF008236),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // delete button
+                    GestureDetector(
+                      onTap: () => _removeFile(idx),
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEE2E2),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Icon(
+                          Icons.close,
+                          size: 14,
+                          color: Color(0xFFE70030),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+            const SizedBox(height: 8),
+          ],
+
+          // ── FIX: upload area — disabled when at max ──
           GestureDetector(
-            onTap: _pickFile,
+            onTap: (_isUploading || !canAddMore) ? null : _pickFile,
             child: CustomPaint(
               painter: _DashedBorderPainter(
-                color: const Color(0xFFAFBCDD),
+                color: !canAddMore
+                    ? const Color(0xFFDDDDDD)
+                    : const Color(0xFFAFBCDD),
                 borderRadius: 8,
                 dashWidth: 6,
                 dashSpace: 4,
               ),
               child: Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 28),
+                padding: const EdgeInsets.symmetric(vertical: 22),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF5F5F5),
+                  color: !canAddMore
+                      ? const Color(0xFFF0F0F0)
+                      : const Color(0xFFF5F5F5),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
-                      _uploadedFileName != null
-                          ? Icons.check_circle_outline
-                          : Icons.upload_file_outlined,
-                      color: _uploadedFileName != null
-                          ? const Color(0xFF008236)
-                          : const Color(0xFF909EC3),
-                      size: 32,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _uploadedFileName ?? 'Upload PDF / DOC',
-                      style: TextStyle(
-                        fontFamily: 'Arimo',
-                        color: _uploadedFileName != null
-                            ? const Color(0xFF008236)
+                    if (_isUploading)
+                      const SizedBox(
+                        width: 28,
+                        height: 28,
+                        child: CircularProgressIndicator(
+                          color: Color(0xFFAFBCDD),
+                          strokeWidth: 2,
+                        ),
+                      )
+                    else ...[
+                      Icon(
+                        Icons.upload_file_outlined,
+                        color: !canAddMore
+                            ? const Color(0xFFCCCCCC)
                             : const Color(0xFF909EC3),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
+                        size: 28,
                       ),
-                    ),
+                      const SizedBox(height: 6),
+                      Text(
+                        !canAddMore
+                            ? 'Maximum $_maxFiles files reached'
+                            : 'Upload PDF / DOC',
+                        style: TextStyle(
+                          fontFamily: 'Arimo',
+                          color: !canAddMore
+                              ? const Color(0xFFCCCCCC)
+                              : const Color(0xFF909EC3),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      if (!canAddMore)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 2),
+                          child: Text(
+                            'Remove a file to upload another',
+                            style: TextStyle(
+                              fontFamily: 'Arimo',
+                              color: Color(0xFFCCCCCC),
+                              fontSize: 11,
+                            ),
+                          ),
+                        )
+                      else if (_uploadedFileNames.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            '${_uploadedFileNames.length}/$_maxFiles files — tap to add more',
+                            style: const TextStyle(
+                              fontFamily: 'Arimo',
+                              color: Color(0xFF99A1AF),
+                              fontSize: 11,
+                            ),
+                          ),
+                        ),
+                    ],
                   ],
                 ),
               ),
             ),
           ),
+
           const SizedBox(height: 12),
+
+          // AI note
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -859,7 +983,7 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
             : [],
       ),
       child: ElevatedButton(
-        onPressed: (canGenerate && !_isCreating) ? _createAndNavigateToTaskBreakdown : null,
+        onPressed: (canGenerate && !_isGenerating) ? _generateTasks : null,
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF9C9EC3),
           foregroundColor: const Color(0xFFFFFFFF),
@@ -871,13 +995,13 @@ class _AssignmentSetupPageState extends State<AssignmentSetupPage> {
             borderRadius: BorderRadius.circular(10),
           ),
         ),
-        child: _isCreating
+        child: _isGenerating
             ? const SizedBox(
                 height: 20,
                 width: 20,
                 child: CircularProgressIndicator(
+                  color: Colors.white,
                   strokeWidth: 2,
-                  color: Color(0xFFFFFFFF),
                 ),
               )
             : const Text(
@@ -960,11 +1084,13 @@ class _DashedBorderPainter extends CustomPainter {
       ..color = color
       ..strokeWidth = strokeWidth
       ..style = PaintingStyle.stroke;
+
     final RRect rrect = RRect.fromRectAndRadius(
       Rect.fromLTWH(0, 0, size.width, size.height),
       Radius.circular(borderRadius),
     );
     final Path path = Path()..addRRect(rrect);
+
     for (final metric in path.computeMetrics()) {
       double distance = 0.0;
       bool draw = true;
@@ -982,6 +1108,5 @@ class _DashedBorderPainter extends CustomPainter {
   bool shouldRepaint(_DashedBorderPainter oldDelegate) =>
       oldDelegate.color != color ||
       oldDelegate.dashWidth != dashWidth ||
-      oldDelegate.dashSpace != dashSpace ||
-      oldDelegate.strokeWidth != strokeWidth;
+      oldDelegate.dashSpace != dashSpace;
 }
