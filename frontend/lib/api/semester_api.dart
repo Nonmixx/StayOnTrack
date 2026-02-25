@@ -3,11 +3,10 @@ import 'package:http/http.dart' as http;
 
 import 'planner_api.dart' show baseUrl;
 import '../utils/calendar_utils.dart';
+import 'package:flutter_stayontrack/user_session.dart';
 
 class SemesterApi {
-  static String _userId = 'default-user';
-
-  static void setUserId(String userId) => _userId = userId;
+  static String get _userId => UserSession.uid ?? 'default-user';
 
   static Future<Semester?> createSemester({
     required String semesterName,

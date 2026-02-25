@@ -468,7 +468,7 @@ class _HomePageState extends State<HomePage> {
                         EmptyStateCard(
                           icon: Icons.check_circle_outline,
                           title: 'No study plan for today',
-                          subtitle: 'Go to your settings to setup your planner.',
+                          subtitle: 'Go to your settings to setup your planner through Academic Details.',
                           buttonLabel: 'Go to Settings',
                           onButtonTap: () => AppNav.goToSettings(context),
                         )

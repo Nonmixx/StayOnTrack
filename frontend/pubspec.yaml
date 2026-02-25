@@ -30,11 +30,15 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-
+  google_fonts: ^6.1.0
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   http: ^1.2.0
+  image_picker: ^1.1.2
+  shared_preferences: ^2.2.0
+  firebase_core: ^3.0.0
+  firebase_auth: ^5.0.0
 
 dev_dependencies:
   flutter_test:
@@ -57,6 +61,7 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
 
   # To add assets to your application, add an assets section, like this:
   # assets:
@@ -88,3 +93,44 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+  assets:
+    - assets/images/latest_logo.png
+    - assets/images/Welcome_page_image.png
+    - assets/images/Welcome_page_image_2.png
+    - assets/images/Welcome_page_image_3.png
+    - assets/images/signup_image.png
+    - assets/images/username.png
+    - assets/images/reminder.png
+    - assets/images/password.png
+    - assets/images/email.png
+    - assets/images/confirm_password.png
+    - assets/images/login_image.png
+    - assets/images/check_email_page.png
+    - assets/images/forgot_password_image.png
+    - assets/images/set_pass_image.png
+    - assets/images/personal_information_icon.png
+    - assets/images/notification_icon.png
+    - assets/images/pets_icon.png
+    - assets/images/next_icon.png
+    - assets/images/academic_icon.png
+    - assets/images/edit.png
+    - assets/images/change.png
+    - assets/images/camera_icon.png
+    - assets/images/lock.png
+    - assets/images/notification_icon_2.png
+    - assets/images/baiyou.png
+    - assets/images/bunny.png
+    - assets/images/calf.png
+    - assets/images/callduck.png
+    - assets/images/tiger.png
+    - assets/images/lion.png
+    - assets/images/stingray.png
+    - assets/images/fruit.png
+    - assets/images/elephant.png
+    - assets/images/otter.png
+    - assets/images/seal.png
+    - assets/images/crocodile.png
+    - assets/images/sheep.png
+    - assets/images/koala.png
+    - assets/images/cat.png
+    - assets/images/dog.png

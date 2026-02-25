@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-
+import 'package:flutter_stayontrack/user_session.dart';
 /// Base URL — same as PlannerApi
 import 'planner_api.dart' show baseUrl;
 String get _baseUrl => baseUrl;
@@ -130,9 +130,7 @@ class MemberTask {
 /// ── API Client ───────────────────────────────────────────────────────────────
 
 class GroupApi {
-  static String _userId = 'default-user';
-
-  static void setUserId(String userId) => _userId = userId;
+  static String get _userId => UserSession.uid ?? 'default-user';
 
   // ── 6.1 Group Overview ──────────────────────────────────────────────────────
 

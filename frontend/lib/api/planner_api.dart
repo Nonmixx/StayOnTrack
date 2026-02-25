@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
-
+import 'package:flutter_stayontrack/user_session.dart';
 import '../utils/calendar_utils.dart';
 
 /// Backend URL. 10.0.2.2 = Android emulator; localhost = web/desktop.
@@ -9,9 +9,7 @@ String get baseUrl => kIsWeb ? 'http://localhost:9091' : 'http://10.0.2.2:9091';
 
 ///Planner Engine API client.
 class PlannerApi {
-  static String _userId = 'default-user';
-
-  static void setUserId(String userId) => _userId = userId;
+  static String get _userId => UserSession.uid ?? 'default-user';
 
   /// Get today's tasks for Home page.
   static Future<List<PlannerTask>> getTodaysTasks() async {
