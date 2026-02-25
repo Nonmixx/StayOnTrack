@@ -56,7 +56,10 @@ class UserSession {
     contact          = prefs.getString(_kContact);
     password         = prefs.getString(_kPassword);
     idToken          = prefs.getString(_kIdToken);
-    profileImagePath = prefs.getString(_kProfileImagePath);
+    if (uid != null) {
+      profileImagePath =
+          prefs.getString('session_profile_image_path_$uid');
+    }
     return uid != null;
   }
 
@@ -81,16 +84,23 @@ class UserSession {
 
   static Future<void> updateProfileImage(String? path) async {
     profileImagePath = path;
+
+    if (uid == null) return;
+
     final prefs = await SharedPreferences.getInstance();
+    final key = 'session_profile_image_path_$uid';
+
     if (path == null) {
-      await prefs.remove(_kProfileImagePath);
+      await prefs.remove(key);
     } else {
-      await prefs.setString(_kProfileImagePath, path);
+      await prefs.setString(key, path);
     }
   }
 
+
   // ── Clear on logout ────────────────────────────────────────────────────────
   static Future<void> clear() async {
+    final savedProfileImage = profileImagePath;
     uid              = null;
     email            = null;
     username         = null;
@@ -106,6 +116,5 @@ class UserSession {
     await prefs.remove(_kContact);
     await prefs.remove(_kPassword);
     await prefs.remove(_kIdToken);
-    await prefs.remove(_kProfileImagePath);
   }
 }

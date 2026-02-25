@@ -26,7 +26,6 @@ class _LoginPageState extends State<LoginPage> {
   String? _passwordError;
   String? _generalError;
 
-
   @override
   void dispose() {
     _emailController.dispose();
@@ -64,9 +63,6 @@ class _LoginPageState extends State<LoginPage> {
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body) as Map<String, dynamic>;
 
-        // ✅ Save everything into UserSession so ProfilePage can read it.
-        //    We also save the typed password here because Firebase never
-        //    returns the plain-text password in any response.
         await UserSession.save(
           uid:      body['uid']      as String,
           email:    body['email']    as String,
@@ -76,9 +72,11 @@ class _LoginPageState extends State<LoginPage> {
           idToken:  body['idToken']  as String,
         );
 
-        if (!mounted) return;
+        final prefs = await SharedPreferences.getInstance();
+        UserSession.profileImagePath =
+            prefs.getString('session_profile_image_path_${body['uid']}');
 
-        // ✅ Navigate to main app with bottom navigation
+        if (!mounted) return;
         Navigator.pushReplacementNamed(context, AppRoutes.home);
       } else {
         final body     = jsonDecode(response.body) as Map<String, dynamic>;
@@ -99,6 +97,8 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5F0EB),
       body: SingleChildScrollView(
@@ -108,12 +108,18 @@ class _LoginPageState extends State<LoginPage> {
             Container(
               width: double.infinity,
               color: const Color(0xFFF5F0EB),
-              padding: const EdgeInsets.only(
-                  top: 48, left: 24, right: 24, bottom: 150),
+              padding: EdgeInsets.only(
+                  top: screenHeight * 0.06, // 自适应
+                  left: 24,
+                  right: 24,
+                  bottom: screenHeight * 0.12 // 自适应
+              ),
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Image.asset('assets/images/latest_logo.png',
-                    height: 100, width: 100, fit: BoxFit.contain),
+                    height: screenHeight * 0.12, // 自适应
+                    width: screenHeight * 0.12,
+                    fit: BoxFit.contain),
               ),
             ),
 
@@ -132,7 +138,12 @@ class _LoginPageState extends State<LoginPage> {
                       topRight: Radius.circular(30),
                     ),
                   ),
-                  padding: const EdgeInsets.fromLTRB(28, 140, 28, 5),
+                  padding: EdgeInsets.fromLTRB(
+                    28,
+                    screenHeight * 0.2, // 顶部自适应
+                    28,
+                    screenHeight * 0.05, // 底部自适应
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
@@ -323,10 +334,10 @@ class _LoginPageState extends State<LoginPage> {
                                   fontWeight: FontWeight.w600)),
                         ),
                       ),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 25),
 
                       const Divider(color: Colors.grey, thickness: 0.5),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 5),
 
                       GestureDetector(
                         onTap: _isLoading
@@ -348,9 +359,11 @@ class _LoginPageState extends State<LoginPage> {
 
                 // ───── Floating image ─────
                 Positioned(
-                  top: -120,
+                  top: screenHeight * -0.15,
                   child: Image.asset('assets/images/login_image.png',
-                      height: 250, width: 250, fit: BoxFit.contain),
+                      height: screenHeight * 0.3,
+                      width: screenHeight * 0.3,
+                      fit: BoxFit.contain),
                 ),
               ],
             ),

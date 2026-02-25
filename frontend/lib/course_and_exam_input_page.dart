@@ -229,7 +229,8 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
           isIndividual: true,
         ));
         // Brief delay when in setup flow so Firestore has the deadline before generatePlan fetches it
-        final fromSetup = ModalRoute.of(context)?.settings.arguments?['fromHomeAdd'] != true;
+        final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+        final fromSetup = args?['fromHomeAdd'] != true;
         if (fromSetup) await Future.delayed(const Duration(milliseconds: 500));
         final plan = await PlannerApi.generatePlan(availableHours: 20);
         AppNav.onPlanRegenerated?.call();
@@ -510,30 +511,30 @@ class _CourseAndExamInputPageState extends State<CourseAndExamInputPage> {
                   title: 'Scheduled Exams (${_exams.length})',
                   child: _exams.isEmpty
                       ? Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 24),
-                          child: Center(
-                            child: Text(
-                              'No exams added yet. Add your first exam to get started.',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: _hintGray,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                        )
-                      : ListView.separated(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: _exams.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 12),
-                          itemBuilder: (context, i) => _ScheduledExamCard(
-                            entry: _exams[i],
-                            formatDateLong: _formatDateLong,
-                            onEdit: () => _editExam(i),
-                            onDelete: () => _deleteExam(i),
-                          ),
+                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    child: Center(
+                      child: Text(
+                        'No exams added yet. Add your first exam to get started.',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: _hintGray,
                         ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  )
+                      : ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _exams.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    itemBuilder: (context, i) => _ScheduledExamCard(
+                      entry: _exams[i],
+                      formatDateLong: _formatDateLong,
+                      onEdit: () => _editExam(i),
+                      onDelete: () => _deleteExam(i),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 32),
 
