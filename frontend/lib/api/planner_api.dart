@@ -64,6 +64,29 @@ class PlannerApi {
     return PlannerWeek.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
   }
 
+  /// Get server's current date (yyyy-MM-dd). Use for sync when device timezone
+  /// differs from backend (e.g. Android emulator). Returns null on failure.
+  static Future<DateTime?> getCurrentDate() async {
+    try {
+      final res = await http
+          .get(Uri.parse('$baseUrl/api/planner/current-date'))
+          .timeout(const Duration(seconds: 5));
+      if (res.statusCode != 200) return null;
+      final map = jsonDecode(res.body) as Map<String, dynamic>;
+      final dateStr = map['date'] as String?;
+      if (dateStr == null) return null;
+      final parts = dateStr.split('-');
+      if (parts.length < 3) return null;
+      return DateTime(
+        int.parse(parts[0]),
+        int.parse(parts[1]),
+        int.parse(parts[2]),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Get tasks for a specific week.
   static Future<List<PlannerTask>> getWeekTasks(String weekStartDate) async {
     try {

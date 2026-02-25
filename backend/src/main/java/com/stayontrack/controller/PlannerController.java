@@ -30,6 +30,16 @@ public class PlannerController {
     }
 
     /**
+     * Get server's current date (ISO yyyy-MM-dd). Use for sync when device timezone
+     * differs from backend (e.g. Android emulator).
+     */
+    @GetMapping("/current-date")
+    public ResponseEntity<java.util.Map<String, String>> getCurrentDate() {
+        String date = LocalDate.now().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE);
+        return ResponseEntity.ok(java.util.Map.of("date", date));
+    }
+
+    /**
      * Get today's tasks for Home page.
      */
     @GetMapping("/today")

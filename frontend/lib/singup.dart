@@ -363,6 +363,21 @@ class _SignUpPageState extends State<SignUpPage> {
                                     letterSpacing: 0.5)),
                           ),
                         ),
+                        SizedBox(height: screenHeight * 0.02),
+                        Center(
+                          child: TextButton(
+                            onPressed: _isLoading ? null : () => Navigator.pop(context),
+                            child: const Text(
+                              'Back to login',
+                              style: TextStyle(
+                                fontSize: 18,
+                                color: Color(0xFF2D2D4E),
+                                fontWeight: FontWeight.w600,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),

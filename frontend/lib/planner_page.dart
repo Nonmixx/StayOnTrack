@@ -17,7 +17,6 @@ class PlannerPage extends StatefulWidget {
 class _PlannerPageState extends State<PlannerPage> {
   List<Deadline> _deadlines = [];
   bool _loading = true;
-  bool _isGenerating = false;
 
   @override
   void initState() {
@@ -40,29 +39,6 @@ class _PlannerPageState extends State<PlannerPage> {
   void didUpdateWidget(PlannerPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.refreshTrigger != widget.refreshTrigger) _loadDeadlines();
-  }
-
-  Future<void> _generatePlan() async {
-    if (_isGenerating) return;
-    setState(() => _isGenerating = true);
-    try {
-      final plan = await PlannerApi.generatePlan(availableHours: 20);
-      if (plan != null) AppNav.onPlanRegenerated?.call();
-      if (mounted) {
-        if (plan != null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Plan generated successfully!'), backgroundColor: Colors.green),
-          );
-          _loadDeadlines();
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Failed to generate plan. Ensure backend is running.'), backgroundColor: Colors.orange),
-          );
-        }
-      }
-    } finally {
-      if (mounted) setState(() => _isGenerating = false);
-    }
   }
 
   Future<void> _loadDeadlines() async {
@@ -130,28 +106,6 @@ class _PlannerPageState extends State<PlannerPage> {
                           subtitle: 'Set up your plan in Settings first (add deadlines). You may add all your exams, assignments or any other tasks there.',
                           buttonLabel: 'Go to Settings',
                           onButtonTap: () => AppNav.goToSettings(context),
-                        ),
-                      )
-                    else
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: _isGenerating ? null : _generatePlan,
-                            icon: _isGenerating
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
-                                  )
-                                : const Icon(Icons.refresh, size: 18),
-                            label: Text(_isGenerating ? 'Generating...' : 'Generate Plan'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFF7E93CC),
-                              side: const BorderSide(color: Color(0xFFAFBCDD)),
-                            ),
-                          ),
                         ),
                       ),
                     ...months.map((month) {

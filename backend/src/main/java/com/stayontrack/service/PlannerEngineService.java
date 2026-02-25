@@ -266,6 +266,7 @@ public class PlannerEngineService {
                 }
             }
             fixOverlappingSessions(tasks);
+            removeDuplicateSessionsPerDay(tasks);  // max 1 session per item per day
             ensureAllDeadlinesRepresented(tasks, relevantDeadlines, week, today, restDays);
             spreadTasksAcrossDays(tasks, week, today, restDays);
             moveTasksOutOfLowEnergyTimes(tasks, peakFocus, lowEnergy, week, today);
@@ -278,8 +279,8 @@ public class PlannerEngineService {
             LocalDate currentWeekStart = getWeekStart(LocalDate.now());
             List<LocalDate> availableDays = getAvailableDaysInWeek(week, today, restDays);
             if (availableDays.isEmpty()) availableDays = List.of(today.plusDays(1));  // fallback to tomorrow
-            Set<String> seen = new LinkedHashSet<>();
-            int dayIdx = 0;
+            Map<LocalDate, Integer> nextHourByDate = new LinkedHashMap<>();
+            for (LocalDate d : availableDays) nextHourByDate.put(d, 9);
             for (Deadline d : deadlines) {
                 if (d.getDueDate() == null) continue;
                 LocalDate deadlineWeekStart = getWeekStart(d.getDueDate());
@@ -287,28 +288,30 @@ public class PlannerEngineService {
                         || weekStart.isBefore(deadlineWeekStart.minusWeeks(12))
                         || weekStart.isBefore(currentWeekStart)) continue;
                 String taskTitle = buildTaskTitle(d);
-                String duration = "1 hour";
-                if (isExamDeadline(d)) {
-                    duration = "2 hours";
+                String duration = isExamDeadline(d) ? "2 hours" : "1 hour";
+                int sessionsPerWeek = isExamDeadline(d) ? 3 : 2;
+                for (int i = 0; i < sessionsPerWeek; i++) {
+                    LocalDate taskDate = availableDays.get(i % availableDays.size());
+                    int hour = nextHourByDate.get(taskDate);
+                    if (hour >= 20) {
+                        taskDate = availableDays.get((i + 1) % availableDays.size());
+                        hour = 9;
+                    }
+                    LocalDateTime scheduledStart = taskDate.atTime(Math.min(22, hour), 0);
+                    String diff;
+                    Boolean ind;
+                    if (isExamDeadline(d)) {
+                        String dDiff = d.getDifficulty();
+                        diff = (dDiff != null && dDiff.contains("%")) ? dDiff : null;
+                        ind = null;
+                    } else {
+                        diff = d.getDifficulty();
+                        ind = d.getIsIndividual();
+                    }
+                    PlannerTask task = new PlannerTask(week.getId(), week.getUserId(), taskTitle, d.getCourse(), duration, taskDate, scheduledStart, diff, ind);
+                    tasks.add(task);
+                    nextHourByDate.put(taskDate, hour + (isExamDeadline(d) ? 2 : 1));
                 }
-                LocalDate taskDate = availableDays.get(dayIdx % availableDays.size());
-                String dedupKey = taskTitle + "|" + d.getCourse() + "|" + taskDate;
-                if (seen.contains(dedupKey)) { dayIdx++; continue; }
-                seen.add(dedupKey);
-                dayIdx++;
-                LocalDateTime scheduledStart = taskDate.atTime(9, 0);
-                String diff;
-                Boolean ind;
-                if (isExamDeadline(d)) {
-                    String dDiff = d.getDifficulty();
-                    diff = (dDiff != null && dDiff.contains("%")) ? dDiff : null;  // exam weight
-                    ind = null;
-                } else {
-                    diff = d.getDifficulty();
-                    ind = d.getIsIndividual();
-                }
-                PlannerTask task = new PlannerTask(week.getId(), week.getUserId(), taskTitle, d.getCourse(), duration, taskDate, scheduledStart, diff, ind);
-                tasks.add(task);
             }
             spreadTasksAcrossDays(tasks, week, LocalDate.now(), restDays);
             moveTasksOutOfLowEnergyTimes(tasks, peakFocus, lowEnergy, week, LocalDate.now());
@@ -319,8 +322,24 @@ public class PlannerEngineService {
     }
 
     /**
+     * Remove duplicate sessions: max 1 task per (title, course) per day.
+     * Keeps the first occurrence, removes later duplicates.
+     */
+    private void removeDuplicateSessionsPerDay(List<PlannerTask> tasks) {
+        Set<String> seen = new LinkedHashSet<>();
+        tasks.removeIf(t -> {
+            LocalDate d = t.getDueDate();
+            if (d == null) return false;
+            String key = (t.getTitle() != null ? t.getTitle() : "") + "|" + (t.getCourse() != null ? t.getCourse() : "") + "|" + d;
+            if (seen.contains(key)) return true;
+            seen.add(key);
+            return false;
+        });
+    }
+
+    /**
      * Spread tasks across available days so we use as many days as reasonable.
-     * - No day has more than 3 sessions
+     * - Max 5 sessions per day (can exceed when no room to spread - specialty)
      * - When we have many available days (e.g. Mon-Fri), use more of them instead of clustering on 1-2 days
      */
     private void spreadTasksAcrossDays(List<PlannerTask> tasks, PlannerWeek week, LocalDate today, List<String> restDays) {
@@ -342,7 +361,7 @@ public class PlannerEngineService {
             LocalDate d = t.getDueDate();
             if (d != null) byDate.computeIfAbsent(d, k -> new ArrayList<>()).add(t);
         }
-        int maxPerDay = 3;
+        int maxPerDay = 5;  // Cap sessions per day; can exceed when no room to spread (specialty)
         int totalTasks = tasks.size();
         int targetDaysUsed = Math.min(availableDays.size(), Math.max(2, (totalTasks + 1) / 2));
         int targetPerDay = Math.max(1, totalTasks / targetDaysUsed);
@@ -535,8 +554,8 @@ public class PlannerEngineService {
     }
 
     /**
-     * Add a task for any relevant deadline that has no task yet.
-     * Uses available days in the week so ALL deadlines get a task.
+     * Add multiple tasks per deadline (2-3 per week), spread across different days.
+     * Exams: 3 sessions; Assignments: 2 sessions. Max 1 per item per day (no duplicates).
      */
     private void ensureAllDeadlinesRepresented(List<PlannerTask> tasks, List<Deadline> relevantDeadlines,
             PlannerWeek week, LocalDate today, List<String> restDays) {
@@ -545,44 +564,44 @@ public class PlannerEngineService {
         if (availableDays.isEmpty()) availableDays = List.of(today);
         Map<LocalDate, Integer> nextHourByDate = new LinkedHashMap<>();
         for (LocalDate d : availableDays) nextHourByDate.put(d, 9);
-        int dayIdx = 0;
         for (Deadline d : relevantDeadlines) {
             String dTitle = d.getTitle() != null ? d.getTitle() : "";
-            boolean covered = false;
+            int coveredCount = 0;
             for (PlannerTask t : tasks) {
                 String tTitle = t.getTitle() != null ? t.getTitle() : "";
                 if (tTitle.contains(dTitle) || (dTitle.length() > 3 && tTitle.contains(dTitle.substring(0, Math.min(10, dTitle.length()))))) {
-                    covered = true;
-                    break;
+                    coveredCount++;
                 }
             }
-            if (covered) continue;
+            int sessionsPerWeek = isExamDeadline(d) ? 3 : 2;
+            int toAdd = Math.max(0, sessionsPerWeek - coveredCount);
+            if (toAdd <= 0) continue;
             String taskTitle = buildTaskTitle(d);
-            String duration = "1 hour";
-            if (isExamDeadline(d)) {
-                duration = "2 hours";
+            String duration = isExamDeadline(d) ? "2 hours" : "1 hour";
+            for (int i = 0; i < toAdd; i++) {
+                int dayIdx = i % availableDays.size();
+                LocalDate taskDate = availableDays.get(dayIdx);
+                int hour = nextHourByDate.get(taskDate);
+                if (hour >= 20) {
+                    dayIdx = (dayIdx + 1) % availableDays.size();
+                    taskDate = availableDays.get(dayIdx);
+                    hour = 9;
+                }
+                LocalDateTime scheduledStart = taskDate.atTime(Math.min(22, hour), 0);
+                String diff;
+                Boolean ind;
+                if (isExamDeadline(d)) {
+                    String dDiff = d.getDifficulty();
+                    diff = (dDiff != null && dDiff.contains("%")) ? dDiff : null;
+                    ind = null;
+                } else {
+                    diff = d.getDifficulty();
+                    ind = d.getIsIndividual();
+                }
+                PlannerTask task = new PlannerTask(week.getId(), week.getUserId(), taskTitle, d.getCourse(), duration, taskDate, scheduledStart, diff, ind);
+                tasks.add(task);
+                nextHourByDate.put(taskDate, hour + (isExamDeadline(d) ? 2 : 1));
             }
-            LocalDate taskDate = availableDays.get(dayIdx % availableDays.size());
-            int hour = nextHourByDate.get(taskDate);
-            if (hour >= 21) {
-                dayIdx++;
-                taskDate = availableDays.get(dayIdx % availableDays.size());
-                hour = 9;
-            }
-            LocalDateTime scheduledStart = taskDate.atTime(Math.min(22, hour), 0);
-            String diff;
-            Boolean ind;
-            if (isExamDeadline(d)) {
-                String dDiff = d.getDifficulty();
-                diff = (dDiff != null && dDiff.contains("%")) ? dDiff : null;
-                ind = null;
-            } else {
-                diff = d.getDifficulty();
-                ind = d.getIsIndividual();
-            }
-            PlannerTask task = new PlannerTask(week.getId(), week.getUserId(), taskTitle, d.getCourse(), duration, taskDate, scheduledStart, diff, ind);
-            tasks.add(task);
-            nextHourByDate.put(taskDate, hour + 2);
         }
         fixOverlappingSessions(tasks);
     }

@@ -372,6 +372,7 @@ class _AssignmentAndProjectPageState extends State<AssignmentAndProjectPage> {
                               label: 'Difficulty',
                               child: DropdownButtonFormField<String>(
                                 value: _selectedDifficulty,
+                                isExpanded: true,
                                 decoration: _inputDecoration(),
                                 borderRadius: BorderRadius.circular(8),
                                 items: _difficulties

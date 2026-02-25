@@ -16,6 +16,7 @@ class MonthlyPlannerPage extends StatefulWidget {
 class _MonthlyPlannerPageState extends State<MonthlyPlannerPage> {
   List<Deadline> _deadlines = [];
   bool _loading = true;
+  DateTime _today = DateTime.now();  // Synced with backend for emulator timezone fix
 
   @override
   void initState() {
@@ -24,8 +25,10 @@ class _MonthlyPlannerPageState extends State<MonthlyPlannerPage> {
   }
 
   Future<void> _loadData() async {
+    final serverToday = await PlannerApi.getCurrentDate();
     final list = await PlannerApi.getDeadlines();
     if (mounted) setState(() {
+      _today = serverToday ?? DateTime.now();
       _deadlines = list;
       _loading = false;
     });
@@ -174,8 +177,7 @@ class _MonthlyPlannerPageState extends State<MonthlyPlannerPage> {
   }
 
   bool _isToday(DateTime d) {
-    final now = DateTime.now();
-    return d.year == now.year && d.month == now.month && d.day == now.day;
+    return d.year == _today.year && d.month == _today.month && d.day == _today.day;
   }
 
   DateTime _normalizeWeekStart(DateTime d) => DateTime(d.year, d.month, d.day);

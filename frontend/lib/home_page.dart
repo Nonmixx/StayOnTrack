@@ -19,6 +19,7 @@ class _HomePageState extends State<HomePage> {
   List<PlannerTask> _tasks = [];
   Deadline? _nearestDeadline;
   bool _loading = true;
+  DateTime _today = DateTime.now();  // Synced with backend for emulator timezone fix
   final Set<String> _demoCompletedIds = {}; // completion for store-sourced tasks
 
   @override
@@ -51,8 +52,11 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _loadData() async {
     try {
+      // Use server date when available (fixes Android emulator timezone mismatch)
+      final serverToday = await PlannerApi.getCurrentDate();
+      final now = serverToday ?? DateTime.now();
+
       // Use same data source as weekly planner: get week tasks, then filter to today
-      final now = DateTime.now();
       final weekStart = CalendarUtils.weekStart(now);
       final weekStartIso = CalendarUtils.toIso(weekStart);
       var weekTasks = await PlannerApi.getWeekTasks(weekStartIso);
@@ -123,6 +127,7 @@ class _HomePageState extends State<HomePage> {
         }
       }
       if (mounted) setState(() {
+        _today = now;
         _tasks = displayTasks;
         _nearestDeadline = nearest;
         _loading = false;
@@ -314,8 +319,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   String _formattedDate() {
-    final now = DateTime.now();
-    return '${CalendarUtils.weekdayName(now)}, ${CalendarUtils.monthName(now.month)} ${now.day}, ${now.year}';
+    return '${CalendarUtils.weekdayName(_today)}, ${CalendarUtils.monthName(_today.month)} ${_today.day}, ${_today.year}';
   }
 
   String _daysUntil(String? dueDate) {
@@ -324,7 +328,7 @@ class _HomePageState extends State<HomePage> {
       final parts = dueDate.split('-');
       if (parts.length < 3) return '';
       final due = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
-      final now = DateTime.now();
+      final now = _today;
       final diff = due.difference(DateTime(now.year, now.month, now.day)).inDays;
       if (diff == 0) return 'due today';
       if (diff == 1) return 'due tomorrow';
