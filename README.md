@@ -19,7 +19,7 @@ Unlike static calendars or reminder apps, StayOnTrack AI converts academic const
 
 | Name | Role |
 |------|------|
-|1. Thian Xin Yi (Team leader)| Planner Engine & Weekly Adaptation |
+|1. Thian Xin Yi (Team leader)| Planner Engine, Weekly Adaptation, & Conducted full-system validation and testing |
 |2. Tan Kai Chun| Academic Constraint Engine & Deadline System |
 |3. Lee Sie Ting| Group Assignment AI & Task Distribution |
 |4. Alice Tang Ong Xin| System Integration & Reward System |
@@ -180,9 +180,9 @@ The backend acts as:
 - Regeneration controller
 - Secure API key handler
 
-### 🔄 System Workflow
+### System Workflow
 
-#### 🔹 A. Academic Setup & Individual Planning
+#### A. Academic Setup & Individual Planning
 
 1. User signs up and logs in (Firebase Authentication).
 2. User completes semester setup:
@@ -202,7 +202,7 @@ The backend acts as:
 8. Validated tasks stored in Firestore.
 9. Planner rendered in Flutter (Year → Month → Week views).
 
-#### 🔹 B. Weekly Adaptation Flow
+#### B. Weekly Adaptation Flow
 
 1. User completes tasks during the week.
 2. Weekly Check-In collects:
@@ -212,7 +212,7 @@ The backend acts as:
 4. Updated tasks replace next week's schedule.
 5. Historical weeks remain unchanged.
 
-#### 🔹 C. Group Assignment AI Flow
+#### C. Group Assignment AI Flow
 
 1. User creates a group and adds members.
 2. User inputs assignment brief (text or file).
@@ -227,7 +227,7 @@ The backend acts as:
 7. User confirms distribution.
 8. Confirmed tasks optionally synced into personal planner as deadlines.
 
-#### 🔹 D. Reward System Flow
+#### D. Reward System Flow
 
 1. When task is marked as completed:
    - RewardService calculates marks.
@@ -237,15 +237,15 @@ The backend acts as:
 3. User can unlock reward items using accumulated marks.
 4. Unlock state stored in UnlockedRewards.
 
-### 🚀 Core Innovation
+### Core Innovation
 
 | Innovation | Description |
 |------------|-------------|
-| **✔ Constraint-First Planning Model** | Planning begins with structured academic constraints rather than reactive reminders. |
-| **✔ Controlled Regeneration Model** | Only the next week adapts — preventing instability across the semester. |
-| **✔ AI-Validated Scheduling** | Backend enforces: no overlapping sessions, proper breaks between sessions, difficulty alignment with peak focus time. |
-| **✔ AI-Based Task Decomposition** | Assignment briefs are analyzed to extract logical, effort-balanced subtasks. |
-| **✔ Achievement-Based Reinforcement** | Consistency is rewarded through structured gamification. |
+| **Constraint-First Planning Model** | Planning begins with structured academic constraints rather than reactive reminders. |
+| **Controlled Regeneration Model** | Only the next week adapts — preventing instability across the semester. |
+| **AI-Validated Scheduling** | Backend enforces: no overlapping sessions, proper breaks between sessions, difficulty alignment with peak focus time. |
+| **AI-Based Task Decomposition** | Assignment briefs are analyzed to extract logical, effort-balanced subtasks. |
+| **Achievement-Based Reinforcement** | Consistency is rewarded through structured gamification. |
 
 This moves beyond calendar apps into an **intelligent academic engine**.
 
